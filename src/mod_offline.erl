@@ -1279,6 +1279,11 @@ mod_doc() ->
                      "chat state notification (as defined in "
                      "https://xmpp.org/extensions/xep-0085.html"
                      "[XEP-0085: Chat State Notifications].")}},
+	   {store_groupchat,
+	    #{value => "true | false",
+	      desc =>
+		  ?T("Whether or not to store groupchat messages. "
+		     "The default value is 'false'.")}},
            {use_mam_for_storage,
             #{value => "true | false",
               desc =>
@@ -1308,7 +1313,7 @@ mod_doc() ->
                      "option can be useful for both standard MUC and MucSub, "
                      "but the bounce is much more likely to happen in the context "
                      "of MucSub, so it is even more important to have it on "
-                     "large MucSub services.The default value is 'false', meaning "
+                     "large MucSub services. The default value is 'false', meaning "
                      "the optimisation is enabled.")}},
            {db_type,
             #{value => "mnesia | sql",
@@ -1325,4 +1330,30 @@ mod_doc() ->
            {cache_life_time,
             #{value => "timeout()",
               desc =>
-                  ?T("Same as top-level 'cache_life_time' option, but applied to this module only.")}}]}.
+                  ?T("Same as top-level 'cache_life_time' option, but applied to this module only.")}}],
+      example =>
+	  [{?T("This example allows power users to have as much as 5000 "
+	       "offline messages, administrators up to 2000, and all the "
+	       "other users up to 100:"),
+	    ["acl:",
+	     "  admin:",
+	     "    user:",
+	     "      - admin1@localhost",
+	     "      - admin2@example.org",
+	     "  poweruser:",
+	     "    user:",
+	     "      - bob@example.org",
+	     "      - jane@example.org",
+	     "",
+	     "shaper_rules:",
+	     "  max_user_offline_messages:",
+	     "    - 5000: poweruser",
+	     "    - 2000: admin",
+	     "    - 100",
+	     "",
+	     "modules:",
+	     "  ...",
+	     "  mod_offline:",
+	     "    access_max_user_messages: max_user_offline_messages",
+	     "  ..."
+	    ]}]}.
