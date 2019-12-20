@@ -1200,7 +1200,13 @@ mod_doc() ->
 		     "remote:",
 		     "  message: 20",
 		     "  presence: 20"]}
-		  ]}}],
+		  ]}},
+           {name,
+            #{desc => ?T("Service name to provide in the Info query to the "
+			 "Service Discovery. Default is '\"Multicast\"'.")}},
+           {vcard,
+            #{desc => ?T("vCard element to return when queried. "
+			 "Default value is 'undefined'.")}}],
       example =>
           ["# Only admins can send packets to multicast service",
 	   "access_rules:",
