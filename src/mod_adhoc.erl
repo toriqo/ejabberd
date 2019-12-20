@@ -283,4 +283,10 @@ mod_doc() ->
     #{desc =>
           ?T("This module implements https://xmpp.org/extensions/xep-0050.html"
              "[XEP-0050: Ad-Hoc Commands]. It's an auxiliary module and is "
-             "only needed by some of the other modules.")}.
+             "only needed by some of the other modules."),
+      opts =>
+          [{report_commands_node,
+            #{value => "true | false",
+              desc =>
+                  ?T("Provide the Commands item in the Service Disvocery. "
+		     "Default value: 'false'.")}}]}.
