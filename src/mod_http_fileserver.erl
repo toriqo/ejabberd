@@ -544,9 +544,19 @@ mod_doc() ->
                      "When an HTTP request hits a directory instead of a "
                      "regular file, those directory indices are looked in order, "
                      "and the first one found is returned. "
-                     "The default value is an empty list.")}}],
+                     "The default value is an empty list.")}},
+           {must_authenticate_with,
+            #{value => ?T("[{Username, Hostname}, ...]"),
+              desc =>
+                  ?T("List of accounts that are allowed to use this service. "
+		     "Default value: '[]'.")}}],
       example =>
-          ["listen:",
+          [{?T("This example configuration will serve the files from the "
+	       "local directory '/var/www' in the address "
+	       "'http://example.org:5280/pub/archive/'. In this example a new "
+	       "content type 'ogg' is defined, 'png' is redefined, and 'jpg' "
+	       "definition is deleted:"),
+	   ["listen:",
            "  ...",
            "  -",
            "    port: 5280",
@@ -572,4 +582,4 @@ mod_doc() ->
            "      .ogg: audio/ogg",
            "      .png: image/png",
            "    default_content_type: text/html",
-           "  ..."]}.
+           "  ..."]}]}.
