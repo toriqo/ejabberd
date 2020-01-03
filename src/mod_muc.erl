@@ -1338,6 +1338,11 @@ mod_doc() ->
                   ?T("Define the type of volatile (in-memory) storage where the module "
                      "will store room information. The only available value for this "
                      "module is 'mnesia'.")}},
+           {hibernation_timeout,
+            #{value => "infinity | Seconds",
+              desc =>
+                  ?T("Timeout before hibernating the room process, expressed "
+		     "in seconds. The default value is 'infinity'.")}},
            {history_size,
             #{value => ?T("Size"),
               desc =>
@@ -1461,6 +1466,21 @@ mod_doc() ->
                      "The default is 'true'. It makes sense to disable room preloading "
                      "when the number of rooms is high: this will improve server startup "
                      "time and memory consumption.")}},
+           {room_shaper,
+            #{value => "none | ShaperName",
+              desc =>
+                  ?T("This option defines shaper for the MUC rooms. "
+		     "The default value is 'none'.")}},
+           {user_message_shaper,
+            #{value => "none | ShaperName",
+              desc =>
+                  ?T("This option defines shaper for the users messages. "
+		     "The default value is 'none'.")}},
+           {user_presence_shaper,
+            #{value => "none | ShaperName",
+              desc =>
+                  ?T("This option defines shaper for the users presences. "
+		     "The default value is 'none'.")}},
            {vcard,
             #{value => ?T("vCard"),
               desc =>
