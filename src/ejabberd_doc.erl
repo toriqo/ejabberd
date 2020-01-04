@@ -70,7 +70,7 @@ man(Lang) ->
                     end
             end, ejabberd_config:callback_modules(all)),
     Options =
-        ["TOP-LEVEL OPTIONS",
+        ["TOP LEVEL OPTIONS",
          "-----------------",
          tr(Lang, ?T("This section describes top level options of ejabberd.")),
          io_lib:nl()] ++
@@ -226,6 +226,65 @@ man_header(Lang) ->
      tr(Lang, ?T("WARNING: YAML is indentation sensitive, so make sure you respect "
                  "indentation, or otherwise you will get pretty cryptic "
                  "configuration errors.")),
+     io_lib:nl(),
+     tr(Lang, ?T("Logically, configuration options are splitted into 3 main categories: "
+                 "'Modules', 'Listeners' and everything else called 'Top Level' options. "
+                 "Thus this document is splitted into 3 main chapters describing each "
+                 "category separately. So, the contents of ejabberd.yml will typically "
+                 "look like this:")),
+     io_lib:nl(),
+     "==========================",
+     "[source,yaml]",
+     "----",
+     "hosts:",
+     "  - example.com",
+     "  - domain.tld",
+     "loglevel: info",
+     "...",
+     "listen:",
+     "  -",
+     "    port: 5222",
+     "    module: ejabberd_c2s",
+     "  ...",
+     "modules:",
+     "  mod_roster: {}",
+     "  ...",
+     "----",
+     "==========================",
+     io_lib:nl(),
+     tr(Lang, ?T("Any configuration error (such as syntax error, unknown option "
+                 "or invalid option value) is fatal in the sense that ejabberd will "
+                 "refuse to load the whole configuration file and will not start or will "
+                 "abort configuration reload.")),
+     io_lib:nl(),
+     tr(Lang, ?T("All options can be changed in runtime by running 'ejabberdctl "
+                 "reload-config' command. Configuration reload is atomic: either all options "
+                 "are accepted and applied simultaneously or the new configuration is "
+                 "refused without any impact on currently running configuration.")),
+     io_lib:nl(),
+     tr(Lang, ?T("Some options can be specified for particular virtual host(s) only "
+                 "using 'host_config' or 'append_host_config' options. Such options "
+                 "are called 'local'. Examples are 'modules', 'auth_method' and 'default_db'. "
+                 "The options that cannot be defined per virtual host are called 'global'. "
+                 "Examples are 'loglevel', 'certfiles' and 'listen'. It is a configuration "
+                 "mistake to put 'global' options under 'host_config' or 'append_host_config' "
+                 "section - ejabberd will refuse to load such configuration.")),
+     io_lib:nl(),
+     str:format(
+       tr(Lang, ?T("It is not recommended to write ejabberd.yml from scratch. Instead it is "
+                   "better to start from \"default\" configuration file available at ~s. "
+                   "Once you get ejabberd running you can start changing configuration "
+                   "options to meet your requirements.")),
+       [default_config_url()]),
+     io_lib:nl(),
+     str:format(
+       tr(Lang, ?T("Note that this document is intended to provide comprehensive description of "
+                   "all configuration options that can be consulted to understand the meaning "
+                   "of a particular option, its format and possible values. It will be quite "
+                   "hard to understand how to configure ejabberd by reading this document only "
+                   "- for this purpose the reader is recommended to read online Configuration "
+                   "Guide available at ~s.")),
+       [configuration_guide_url()]),
      io_lib:nl()].
 
 man_footer(Lang) ->
@@ -249,16 +308,13 @@ man_footer(Lang) ->
      io_lib:nl(),
      "SEE ALSO",
      "---------",
-     tr(Lang, ?T("Default configuration file")) ++
-         ": <https://github.com/processone/ejabberd/blob/" ++
-         binary_to_list(binary:part(ejabberd_config:version(), {0,5})) ++
-         "/ejabberd.yml.example>",
+     tr(Lang, ?T("Default configuration file")) ++ ": " ++ default_config_url(),
      io_lib:nl(),
      tr(Lang, ?T("Main site")) ++ ": <https://ejabberd.im>",
      io_lib:nl(),
      tr(Lang, ?T("Documentation")) ++ ": <https://docs.ejabberd.im>",
      io_lib:nl(),
-     tr(Lang, ?T("Configuration Guide")) ++ ": <https://docs.ejabberd.im/admin/configuration>",
+     tr(Lang, ?T("Configuration Guide")) ++ ": " ++ configuration_guide_url(),
      io_lib:nl(),
      tr(Lang, ?T("Source code")) ++ ": <https://github.com/processone/ejabberd>",
      io_lib:nl(),
@@ -393,3 +449,11 @@ warn(Format, Args) ->
 strip_backend_suffix(M) ->
     [H|T] = lists:reverse(string:tokens(atom_to_list(M), "_")),
     {list_to_atom(string:join(lists:reverse(T), "_")), list_to_atom(H)}.
+
+default_config_url() ->
+    "<https://github.com/processone/ejabberd/blob/" ++
+        binary_to_list(binary:part(ejabberd_config:version(), {0,5})) ++
+        "/ejabberd.yml.example>".
+
+configuration_guide_url() ->
+    "<https://docs.ejabberd.im/admin/configuration>".
