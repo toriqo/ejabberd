@@ -332,7 +332,7 @@ make_val(LServer, Match, Field, Val) ->
     Condition = case str:suffix(<<"*">>, Val) of
 		  true ->
 		      Val1 = str:substr(Val, 1, byte_size(Val) - 1),
-		      SVal = <<(ejabberd_sql:escape(
+		      SVal = <<"%", (ejabberd_sql:escape(
                                   ejabberd_sql:escape_like_arg_circumflex(
                                     Val1)))/binary,
 			       "%">>,
