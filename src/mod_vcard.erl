@@ -353,7 +353,7 @@ make_vcard_search(User, LUser, LServer, VCARD) ->
     Description = fxml:get_path_s(VCARD,
 			      [{elem, <<"DESC">>}, cdata]),
     Keyword = fxml:get_path_s(VCARD,
-			    [{elem, <<"CATEGORY">>}, {elem, <<"KEYWORD">>}, cdata]),
+			    [{elem, <<"CATEGORIES">>}, {elem, <<"KEYWORD">>}, cdata]),
     EMail = case EMail1 of
 	      <<"">> -> EMail2;
 	      _ -> EMail1
