@@ -22,7 +22,8 @@
 	{us, user, luser, fn, lfn, family, lfamily, given,
 	 lgiven, middle, lmiddle, nickname, lnickname, bday,
 	 lbday, ctry, lctry, locality, llocality, email, lemail,
-	 orgname, lorgname, orgunit, lorgunit}).
+	 orgname, lorgname, orgunit, lorgunit, role, lrole,
+	 description, ldescription, keyword, lkeyword}).
 
 -record(vcard, {us = {<<"">>, <<"">>} :: {binary(), binary()} | binary(),
                 vcard = #xmlel{} :: xmlel()}).

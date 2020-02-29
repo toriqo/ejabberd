@@ -6,6 +6,7 @@
 .#*
 .edts
 *.dump
+.idea/
 /Makefile
 /config.log
 /config.status

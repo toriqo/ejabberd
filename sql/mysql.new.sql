@@ -162,6 +162,12 @@ CREATE TABLE vcard_search (
     lorgname varchar(191) NOT NULL,
     orgunit text NOT NULL,
     lorgunit varchar(191) NOT NULL,
+    role text NOT NULL,
+    lrole varchar(191) NOT NULL,
+    description text NOT NULL,
+    ldescription varchar(191) NOT NULL,
+    keyword text NOT NULL,
+    lkeyword varchar(191) NOT NULL,
     PRIMARY KEY (server_host(191), lusername)
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -176,6 +182,9 @@ CREATE INDEX i_vcard_search_sh_llocality ON vcard_search(server_host(191), lloca
 CREATE INDEX i_vcard_search_sh_lemail    ON vcard_search(server_host(191), lemail);
 CREATE INDEX i_vcard_search_sh_lorgname  ON vcard_search(server_host(191), lorgname);
 CREATE INDEX i_vcard_search_sh_lorgunit  ON vcard_search(server_host(191), lorgunit);
+CREATE INDEX i_vcard_search_sh_lrole  ON vcard_search(server_host(191), lrole);
+CREATE INDEX i_vcard_search_sh_ldedscription  ON vcard_search(server_host(191), ldescription);
+CREATE INDEX i_vcard_search_sh_lkeyword  ON vcard_search(server_host(191), lkeyword);
 
 CREATE TABLE privacy_default_list (
     username varchar(191) NOT NULL,

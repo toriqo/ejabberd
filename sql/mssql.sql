@@ -433,6 +433,12 @@ CREATE TABLE [dbo].[vcard_search] (
         [lorgname] [varchar] (250) NOT NULL,
         [orgunit] [text] NOT NULL,
         [lorgunit] [varchar] (250) NOT NULL,
+        [role] [text] NOT NULL,
+        [lrole] [varchar] (250) NOT NULL,
+        [description] [text] NOT NULL,
+        [ldescription] [varchar] (250) NOT NULL,
+        [keyword] [text] NOT NULL,
+        [lkeyword] [varchar] (250) NOT NULL,
  CONSTRAINT [vcard_search_PRIMARY] PRIMARY KEY CLUSTERED 
 (
         [lusername] ASC
@@ -470,6 +476,15 @@ CREATE INDEX [vcard_search_lorgname] ON [vcard_search] (lorgname)
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
 
 CREATE INDEX [vcard_search_lorgunit] ON [vcard_search] (lorgunit)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
+
+CREATE INDEX [vcard_search_lrole] ON [vcard_search] (lrole)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
+
+CREATE INDEX [vcard_search_ldescription] ON [vcard_search] (ldescription)
+WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
+
+CREATE INDEX [vcard_search_lkeyword] ON [vcard_search] (lkeyword)
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
 
 ALTER TABLE [dbo].[pubsub_item]  WITH CHECK ADD  CONSTRAINT [pubsub_item_ibfk_1] FOREIGN KEY([nodeid])

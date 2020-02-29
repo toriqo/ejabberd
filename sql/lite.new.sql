@@ -157,6 +157,9 @@ CREATE TABLE vcard_search (
     lorgname text NOT NULL,
     orgunit text NOT NULL,
     lorgunit text NOT NULL,
+    lrole text NOT NULL,
+    ldescription text NOT NULL,
+    lkeyword text NOT NULL,
     PRIMARY KEY (server_host, lusername)
 );
 
@@ -171,6 +174,9 @@ CREATE INDEX i_vcard_search_sh_llocality ON vcard_search(server_host, llocality)
 CREATE INDEX i_vcard_search_sh_lemail    ON vcard_search(server_host, lemail);
 CREATE INDEX i_vcard_search_sh_lorgname  ON vcard_search(server_host, lorgname);
 CREATE INDEX i_vcard_search_sh_lorgunit  ON vcard_search(server_host, lorgunit);
+CREATE INDEX i_vcard_search_sh_lrole  ON vcard_search(server_host, lrole);
+CREATE INDEX i_vcard_search_sh_ldescription  ON vcard_search(server_host, ldescription);
+CREATE INDEX i_vcard_search_sh_lkeyword  ON vcard_search(server_host, lkeyword);
 
 CREATE TABLE privacy_default_list (
     username text NOT NULL,

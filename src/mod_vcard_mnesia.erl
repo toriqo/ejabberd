@@ -52,7 +52,8 @@ init(_Host, _Opts) ->
 			 {index, [ luser, lfn, lfamily,
 				   lgiven, lmiddle, lnickname,
 				   lbday, lctry, llocality,
-				   lemail, lorgname, lorgunit
+				   lemail, lorgname, lorgunit,
+                   lrole, ldescription, lkeyword
 				 ]}]).
 
 stop(_Host) ->
@@ -140,7 +141,8 @@ import(LServer, <<"vcard_search">>,
         Family, LFamily, Given, LGiven,
         Middle, LMiddle, Nickname, LNickname,
         BDay, LBDay, CTRY, LCTRY, Locality, LLocality,
-        EMail, LEMail, OrgName, LOrgName, OrgUnit, LOrgUnit]) ->
+        EMail, LEMail, OrgName, LOrgName, OrgUnit, LOrgUnit,
+        Role, LRole, Description, LDescription, Keyword, LKeyword]) ->
     mnesia:dirty_write(
       #vcard_search{us = {LUser, LServer},
                     user = {User, LServer}, luser = LUser,
@@ -153,7 +155,10 @@ import(LServer, <<"vcard_search">>,
                     locality = Locality, llocality = LLocality,
                     email = EMail, lemail = LEMail,
                     orgname = OrgName, lorgname = LOrgName,
-                    orgunit = OrgUnit, lorgunit = LOrgUnit}).
+                    orgunit = OrgUnit, lorgunit = LOrgUnit,
+                    role = Role, lrole = LRole,
+                    description = Description, ldescription = LDescription,
+                    keyword = Keyword, lkeyword = LKeyword}).
 
 need_transform({vcard, {U, S}, _}) when is_list(U) orelse is_list(S) ->
     ?INFO_MSG("Mnesia table 'vcard' will be converted to binary", []),
@@ -222,8 +227,14 @@ filter_fields([{SVar, [Val]} | Ds], Match, LServer)
 		       Match#vcard_search{lemail = make_val(LVal)};
 		   <<"orgname">> ->
 		       Match#vcard_search{lorgname = make_val(LVal)};
-		 <<"orgunit">> ->
-		       Match#vcard_search{lorgunit = make_val(LVal)};
+         <<"orgunit">> ->
+               Match#vcard_search{lorgunit = make_val(LVal)};
+         <<"role">> ->
+               Match#vcard_search{lrole = make_val(LVal)};
+         <<"description">> ->
+               Match#vcard_search{ldescription = make_val(LVal)};
+         <<"keyword">> ->
+               Match#vcard_search{lkeyword = make_val(LVal)};
 		   _ -> Match
 	       end,
     filter_fields(Ds, NewMatch, LServer);
@@ -267,7 +278,10 @@ record_to_item(R) ->
      {<<"locality">>, (R#vcard_search.locality)},
      {<<"email">>, (R#vcard_search.email)},
      {<<"orgname">>, (R#vcard_search.orgname)},
-     {<<"orgunit">>, (R#vcard_search.orgunit)}].
+     {<<"orgunit">>, (R#vcard_search.orgunit)},
+     {<<"role">>, (R#vcard_search.role)},
+     {<<"description">>, (R#vcard_search.description)},
+     {<<"keyword">>, (R#vcard_search.keyword)}].
 
 mod_opt_type(search_all_hosts) ->
     econf:bool().

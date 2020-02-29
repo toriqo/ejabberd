@@ -340,7 +340,7 @@ make_vcard_search(User, LUser, LServer, VCARD) ->
     Locality = fxml:get_path_s(VCARD,
 			      [{elem, <<"ADR">>}, {elem, <<"LOCALITY">>},
 			       cdata]),
-    EMail1 = fxml:get_path_s(VCARD,
+    EMail1 = fxml:get_path_s(VCARD,	
 			    [{elem, <<"EMAIL">>}, {elem, <<"USERID">>}, cdata]),
     EMail2 = fxml:get_path_s(VCARD,
 			    [{elem, <<"EMAIL">>}, cdata]),
@@ -348,6 +348,12 @@ make_vcard_search(User, LUser, LServer, VCARD) ->
 			     [{elem, <<"ORG">>}, {elem, <<"ORGNAME">>}, cdata]),
     OrgUnit = fxml:get_path_s(VCARD,
 			     [{elem, <<"ORG">>}, {elem, <<"ORGUNIT">>}, cdata]),
+    Role = fxml:get_path_s(VCARD,
+			      [{elem, <<"ROLE">>}, cdata]),
+    Description = fxml:get_path_s(VCARD,
+			      [{elem, <<"DESC">>}, cdata]),
+    Keyword = fxml:get_path_s(VCARD,
+			    [{elem, <<"CATEGORY">>}, {elem, <<"KEYWORD">>}, cdata]),
     EMail = case EMail1 of
 	      <<"">> -> EMail2;
 	      _ -> EMail1
@@ -363,6 +369,9 @@ make_vcard_search(User, LUser, LServer, VCARD) ->
     LEMail = string2lower(EMail),
     LOrgName = string2lower(OrgName),
     LOrgUnit = string2lower(OrgUnit),
+    LRole = string2lower(Role),
+    LDescription = string2lower(Description),
+    LKeyword = string2lower(Keyword),
     US = {LUser, LServer},
     #vcard_search{us = US,
 		  user = {User, LServer},
@@ -387,7 +396,13 @@ make_vcard_search(User, LUser, LServer, VCARD) ->
 		  orgname = OrgName,
 		  lorgname = LOrgName,
 		  orgunit = OrgUnit,
-		  lorgunit = LOrgUnit}.
+		  lorgunit = LOrgUnit,
+		  role = Role,
+		  lrole = LRole,
+		  description = Description,
+		  ldescription = LDescription,
+		  keyword = Keyword,
+		  lkeyword = LKeyword}.
 
 -spec vcard_iq_set(iq()) -> iq() | {stop, stanza_error()}.
 vcard_iq_set(#iq{from = From, lang = Lang, sub_els = [VCard]} = IQ) ->

@@ -87,7 +87,13 @@ set_vcard(LUser, LServer, VCARD,
 			orgname = OrgName,
 			lorgname = LOrgName,
 			orgunit = OrgUnit,
-			lorgunit = LOrgUnit}) ->
+			lorgunit = LOrgUnit,
+      role = Role,
+      lrole = LRole,
+      description = Description,
+      ldescription = LDescription,
+      keyword = Keyword,
+      lkeyword = LKeyword}) ->
     SVCARD = fxml:element_to_binary(VCARD),
     ejabberd_sql:sql_transaction(
       LServer,
@@ -121,7 +127,13 @@ set_vcard(LUser, LServer, VCARD,
                            "orgname=%(OrgName)s",
                            "lorgname=%(LOrgName)s",
                            "orgunit=%(OrgUnit)s",
-                           "lorgunit=%(LOrgUnit)s"])
+                           "lorgunit=%(LOrgUnit)s",
+                           "role=%(Role)s",
+                           "lrole=%(LRole)s",
+                           "description=%(Description)s",
+                           "ldescription=%(LDescription)s",
+                           "keyword=%(Keyword)s",
+                           "lkeyword=%(LKeyword)s"])
       end).
 
 search(LServer, Data, AllowReturnAll, MaxMatch) ->
@@ -138,14 +150,14 @@ search(LServer, Data, AllowReturnAll, MaxMatch) ->
 			LServer,
 			[<<"select username, fn, family, given, "
 			   "middle,        nickname, bday, ctry, "
-			   "locality,        email, orgname, orgunit "
+			   "locality,        email, orgname, orgunit, role, description, keyword "
 			   "from vcard_search ">>,
 			 MatchSpec, Limit, <<";">>]) of
 	       {selected,
 		[<<"username">>, <<"fn">>, <<"family">>, <<"given">>,
 		 <<"middle">>, <<"nickname">>, <<"bday">>, <<"ctry">>,
 		 <<"locality">>, <<"email">>, <<"orgname">>,
-		 <<"orgunit">>], Rs} when is_list(Rs) ->
+		 <<"orgunit">>, <<"role">>, <<"description">>, <<"keyword">>], Rs} when is_list(Rs) ->
 		   [row_to_item(LServer, R) || R <- Rs];
 	       Error ->
 		   ?ERROR_MSG("~p", [Error]), []
@@ -164,7 +176,10 @@ search_fields(_LServer) ->
      {?T("City"), <<"locality">>},
      {?T("Email"), <<"email">>},
      {?T("Organization Name"), <<"orgname">>},
-     {?T("Organization Unit"), <<"orgunit">>}].
+     {?T("Organization Unit"), <<"orgunit">>},
+     {?T("Role"), <<"role">>},
+     {?T("Description"), <<"description">>},
+     {?T("Keyword"), <<"keyword">>}].
 
 search_reported(_LServer) ->
     [{?T("Jabber ID"), <<"jid">>},
@@ -178,7 +193,10 @@ search_reported(_LServer) ->
      {?T("City"), <<"locality">>},
      {?T("Email"), <<"email">>},
      {?T("Organization Name"), <<"orgname">>},
-     {?T("Organization Unit"), <<"orgunit">>}].
+     {?T("Organization Unit"), <<"orgunit">>},
+     {?T("Role"), <<"role">>},
+     {?T("Description"), <<"description">>},
+     {?T("Keyword"), <<"keyword">>}].
 
 remove_user(LUser, LServer) ->
     ejabberd_sql:sql_transaction(
@@ -217,7 +235,10 @@ export(_Server) ->
                               locality = Locality, llocality = LLocality,
                               email = EMail, lemail = LEMail,
                               orgname = OrgName, lorgname = LOrgName,
-                              orgunit = OrgUnit, lorgunit = LOrgUnit})
+                              orgunit = OrgUnit, lorgunit = LOrgUnit,
+                              role = Role, lrole = LRole,
+                              description = Description, ldescription = LDescription,
+                              keyword = Keyword, lkeyword = LKeyword})
             when LServer == Host ->
               [?SQL("delete from vcard_search"
                     " where lusername=%(LUser)s and %(LServer)H;"),
@@ -246,7 +267,13 @@ export(_Server) ->
                             "orgname=%(OrgName)s",
                             "lorgname=%(LOrgName)s",
                             "orgunit=%(OrgUnit)s",
-                            "lorgunit=%(LOrgUnit)s"])];
+                            "lorgunit=%(LOrgUnit)s",
+                            "role=%(Role)s",
+                            "lrole=%(LRole)s",
+                            "description=%(Description)s",
+                            "ldescription=%(LDescription)s",
+                            "keyword=%(Keyword)s",
+                            "lkeyword=%(LKeyword)s"])];
          (_Host, _R) ->
               []
       end}].
@@ -292,6 +319,9 @@ filter_fields([{SVar, [Val]} | Ds], Match, LServer)
 		   <<"email">> -> make_val(LServer, Match, <<"lemail">>, LVal);
 		   <<"orgname">> -> make_val(LServer, Match, <<"lorgname">>, LVal);
 		   <<"orgunit">> -> make_val(LServer, Match, <<"lorgunit">>, LVal);
+       <<"role">> -> make_val(LServer, Match, <<"lrole">>, LVal);
+       <<"description">> -> make_val(LServer, Match, <<"ldescription">>, LVal);
+       <<"keyword">> -> make_val(LServer, Match, <<"lkeyword">>, LVal);
 		   _ -> Match
 	       end,
     filter_fields(Ds, NewMatch, LServer);
@@ -318,7 +348,7 @@ make_val(LServer, Match, Field, Val) ->
     end.
 
 row_to_item(LServer, [Username, FN, Family, Given, Middle, Nickname, BDay,
-		      CTRY, Locality, EMail, OrgName, OrgUnit]) ->
+		      CTRY, Locality, EMail, OrgName, OrgUnit, Role, Description, Keyword]) ->
     [{<<"jid">>, <<Username/binary, $@, LServer/binary>>},
      {<<"fn">>, FN},
      {<<"last">>, Family},
@@ -330,4 +360,7 @@ row_to_item(LServer, [Username, FN, Family, Given, Middle, Nickname, BDay,
      {<<"locality">>, Locality},
      {<<"email">>, EMail},
      {<<"orgname">>, OrgName},
-     {<<"orgunit">>, OrgUnit}].
+     {<<"orgunit">>, OrgUnit},
+     {<<"role">>, Role},
+     {<<"description">>, Description},
+     {<<"keyword">>, Keyword}].
