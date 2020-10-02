@@ -43,7 +43,7 @@
 
 -include("logger.hrl").
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 
 -include("mod_roster.hrl").
 
@@ -71,10 +71,20 @@
 -callback is_user_in_group({binary(), binary()}, binary(), binary()) -> boolean().
 -callback add_user_to_group(binary(), {binary(), binary()}, binary()) -> any().
 -callback remove_user_from_group(binary(), {binary(), binary()}, binary()) -> {atomic, any()}.
+-callback use_cache(binary()) -> boolean().
+-callback cache_nodes(binary()) -> [node()].
+
+-optional_callbacks([use_cache/1, cache_nodes/1]).
+
+-define(GROUP_OPTS_CACHE, shared_roster_group_opts_cache).
+-define(USER_GROUPS_CACHE, shared_roster_user_groups_cache).
+-define(GROUP_EXPLICIT_USERS_CACHE, shared_roster_group_explicit_cache).
+-define(SPECIAL_GROUPS_CACHE, shared_roster_special_groups_cache).
 
 start(Host, Opts) ->
     Mod = gen_mod:db_mod(Opts, ?MODULE),
     Mod:init(Host, Opts),
+    init_cache(Mod, Host, Opts),
     ejabberd_hooks:add(webadmin_menu_host, Host, ?MODULE,
 		       webadmin_menu, 70),
     ejabberd_hooks:add(webadmin_page_host, Host, ?MODULE,
@@ -136,17 +146,54 @@ reload(Host, NewOpts, OldOpts) ->
 depends(_Host, _Opts) ->
     [].
 
+-spec init_cache(module(), binary(), gen_mod:opts()) -> ok.
+init_cache(Mod, Host, Opts) ->
+    case use_cache(Mod, Host) of
+        true ->
+            CacheOpts = cache_opts(Opts),
+            ets_cache:new(?GROUP_OPTS_CACHE, CacheOpts),
+	    ets_cache:new(?USER_GROUPS_CACHE, CacheOpts),
+	    ets_cache:new(?GROUP_EXPLICIT_USERS_CACHE, CacheOpts),
+	    ets_cache:new(?SPECIAL_GROUPS_CACHE, CacheOpts);
+        false ->
+	    ets_cache:delete(?GROUP_OPTS_CACHE),
+	    ets_cache:delete(?USER_GROUPS_CACHE),
+	    ets_cache:delete(?GROUP_EXPLICIT_USERS_CACHE),
+	    ets_cache:delete(?SPECIAL_GROUPS_CACHE)
+    end.
+
+-spec cache_opts(gen_mod:opts()) -> [proplists:property()].
+cache_opts(Opts) ->
+    MaxSize = mod_private_opt:cache_size(Opts),
+    CacheMissed = mod_private_opt:cache_missed(Opts),
+    LifeTime = mod_private_opt:cache_life_time(Opts),
+    [{max_size, MaxSize}, {cache_missed, CacheMissed}, {life_time, LifeTime}].
+
+-spec use_cache(module(), binary()) -> boolean().
+use_cache(Mod, Host) ->
+    case erlang:function_exported(Mod, use_cache, 1) of
+        true -> Mod:use_cache(Host);
+        false -> mod_shared_roster_opt:use_cache(Host)
+    end.
+
+-spec cache_nodes(module(), binary()) -> [node()].
+cache_nodes(Mod, Host) ->
+    case erlang:function_exported(Mod, cache_nodes, 1) of
+        true -> Mod:cache_nodes(Host);
+        false -> ejabberd_cluster:get_nodes()
+    end.
+
 -spec get_user_roster([#roster{}], {binary(), binary()}) -> [#roster{}].
 get_user_roster(Items, US) ->
     {U, S} = US,
     DisplayedGroups = get_user_displayed_groups(US),
     SRUsers = lists:foldl(fun (Group, Acc1) ->
-				  GroupName = get_group_name(S, Group),
+				  GroupLabel = get_group_label(S, Group), %++
 				  lists:foldl(fun (User, Acc2) ->
 						      if User == US -> Acc2;
 							 true ->
 							     dict:append(User,
-									 GroupName,
+									 GroupLabel,
 									 Acc2)
 						      end
 					      end,
@@ -161,12 +208,12 @@ get_user_roster(Items, US) ->
 						      case dict:find(US1,
 								     SRUsers1)
 							  of
-							{ok, GroupNames} ->
+							{ok, GroupLabels} ->
 							    {Item#roster{subscription
 									     =
 									     both,
 									 groups =
-									     Item#roster.groups ++ GroupNames,
+									     Item#roster.groups ++ GroupLabels,
 									 ask =
 									     none},
 							     dict:erase(US1,
@@ -179,8 +226,8 @@ get_user_roster(Items, US) ->
     SRItems = [#roster{usj = {U, S, {U1, S1, <<"">>}},
 		       us = US, jid = {U1, S1, <<"">>},
 		       name = get_rosteritem_name(U1, S1),
-		       subscription = both, ask = none, groups = GroupNames}
-	       || {{U1, S1}, GroupNames} <- dict:to_list(SRUsersRest)],
+		       subscription = both, ask = none, groups = GroupLabels}
+	       || {{U1, S1}, GroupLabels} <- dict:to_list(SRUsersRest)],
     SRItems ++ NewItems1.
 
 get_rosteritem_name(U, S) ->
@@ -221,12 +268,12 @@ process_item(RosterItem, Host) ->
       [] -> RosterItem;
       %% Roster item cannot be removed: We simply reset the original groups:
       _ when RosterItem#roster.subscription == remove ->
-	  GroupNames = lists:map(fun (Group) ->
-					 get_group_name(Host, Group)
+	  GroupLabels = lists:map(fun (Group) ->
+					 get_group_label(Host, Group)
 				 end,
 				 CommonGroups),
 	  RosterItem#roster{subscription = both, ask = none,
-			    groups = GroupNames};
+			    groups = GroupLabels};
       %% Both users have at least a common shared group,
       %% So each user can see the other
       _ ->
@@ -305,10 +352,10 @@ get_jid_info({Subscription, Ask, Groups}, User, Server,
     US1 = {U1, S1},
     DisplayedGroups = get_user_displayed_groups(US),
     SRUsers = lists:foldl(fun (Group, Acc1) ->
-				  GroupName = get_group_name(LServer, Group),
+				  GroupLabel = get_group_label(LServer, Group), %++
 				  lists:foldl(fun (User1, Acc2) ->
 						      dict:append(User1,
-								  GroupName,
+								  GroupLabel,
 								  Acc2)
 					      end,
 					      Acc1,
@@ -316,8 +363,8 @@ get_jid_info({Subscription, Ask, Groups}, User, Server,
 			  end,
 			  dict:new(), DisplayedGroups),
     case dict:find(US1, SRUsers) of
-      {ok, GroupNames} ->
-	  NewGroups = if Groups == [] -> GroupNames;
+      {ok, GroupLabels} ->
+	  NewGroups = if Groups == [] -> GroupLabels;
 			 true -> Groups
 		      end,
 	  {both, none, NewGroups};
@@ -376,24 +423,75 @@ create_group(Host, Group) ->
 
 create_group(Host, Group, Opts) ->
     Mod = gen_mod:db_mod(Host, ?MODULE),
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:insert(?GROUP_OPTS_CACHE, {Host, Group}, Opts, cache_nodes(Mod, Host)),
+	    ets_cache:clear(?SPECIAL_GROUPS_CACHE, cache_nodes(Mod, Host));
+	_ ->
+	    ok
+    end,
     Mod:create_group(Host, Group, Opts).
 
 delete_group(Host, Group) ->
     Mod = gen_mod:db_mod(Host, ?MODULE),
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:delete(?GROUP_OPTS_CACHE, {Host, Group}, cache_nodes(Mod, Host)),
+	    ets_cache:clear(?USER_GROUPS_CACHE, cache_nodes(Mod, Host)),
+	    ets_cache:clear(?GROUP_EXPLICIT_USERS_CACHE, cache_nodes(Mod, Host)),
+	    ets_cache:clear(?SPECIAL_GROUPS_CACHE, cache_nodes(Mod, Host));
+	_ ->
+	    ok
+    end,
     Mod:delete_group(Host, Group).
 
-get_group_opts(Host, Group) ->
+get_group_opts(Host1, Group1) ->
+    {Host, Group} = split_grouphost(Host1, Group1),
     Mod = gen_mod:db_mod(Host, ?MODULE),
-    Mod:get_group_opts(Host, Group).
+    Res = case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:lookup(
+		?GROUP_OPTS_CACHE, {Host, Group},
+		fun() ->
+		    case Mod:get_group_opts(Host, Group) of
+			error -> error;
+			V -> {cache, V}
+		    end
+		end);
+	false ->
+	    Mod:get_group_opts(Host, Group)
+    end,
+    case Res of
+        {ok, Opts} -> Opts;
+        error -> error
+    end.
 
 set_group_opts(Host, Group, Opts) ->
     Mod = gen_mod:db_mod(Host, ?MODULE),
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:delete(?GROUP_OPTS_CACHE, {Host, Group}, cache_nodes(Mod, Host)),
+	    ets_cache:insert(?GROUP_OPTS_CACHE, {Host, Group}, Opts, cache_nodes(Mod, Host)),
+	    ets_cache:clear(?SPECIAL_GROUPS_CACHE, cache_nodes(Mod, Host));
+	_ ->
+	    ok
+    end,
     Mod:set_group_opts(Host, Group, Opts).
 
 get_user_groups(US) ->
     Host = element(2, US),
     Mod = gen_mod:db_mod(Host, ?MODULE),
-    Mod:get_user_groups(US, Host) ++ get_special_users_groups(Host).
+    UG = case use_cache(Mod, Host) of
+	     true ->
+		 ets_cache:lookup(
+		     ?USER_GROUPS_CACHE, {Host, US},
+		     fun() ->
+			 {cache, Mod:get_user_groups(US, Host)}
+		     end);
+	     false ->
+		 Mod:get_user_groups(US, Host)
+	 end,
+    UG ++ get_special_users_groups(Host).
 
 is_group_enabled(Host1, Group1) ->
     {Host, Group} = split_grouphost(Host1, Group1),
@@ -419,16 +517,7 @@ get_online_users(Host) ->
 
 get_group_users(Host1, Group1) ->
     {Host, Group} = split_grouphost(Host1, Group1),
-    case get_group_opt(Host, Group, all_users, false) of
-      true -> ejabberd_auth:get_users(Host);
-      false -> []
-    end
-      ++
-      case get_group_opt(Host, Group, online_users, false) of
-	true -> get_online_users(Host);
-	false -> []
-      end
-	++ get_group_explicit_users(Host, Group).
+    get_group_users(Host, Group, get_group_opts(Host, Group)).
 
 get_group_users(Host, Group, GroupOpts) ->
     case proplists:get_value(all_users, GroupOpts, false) of
@@ -445,32 +534,72 @@ get_group_users(Host, Group, GroupOpts) ->
 
 get_group_explicit_users(Host, Group) ->
     Mod = gen_mod:db_mod(Host, ?MODULE),
-    Mod:get_group_explicit_users(Host, Group).
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:lookup(
+		?GROUP_EXPLICIT_USERS_CACHE, {Host, Group},
+		fun() ->
+		    {cache, Mod:get_group_explicit_users(Host, Group)}
+		end);
+	false ->
+	    Mod:get_group_explicit_users(Host, Group)
+    end.
 
-get_group_name(Host1, Group1) ->
+get_group_label(Host1, Group1) ->
     {Host, Group} = split_grouphost(Host1, Group1),
-    get_group_opt(Host, Group, name, Group).
+    get_group_opt(Host, Group, label, Group).
 
 %% Get list of names of groups that have @all@/@online@/etc in the memberlist
 get_special_users_groups(Host) ->
-    lists:filtermap(fun ({Group, Opts}) ->
-             case proplists:get_value(all_users, Opts, false) orelse
-                  proplists:get_value(online_users, Opts, false) of
-               true -> {true, Group};
-               false -> false
-             end
-         end,
-         groups_with_opts(Host)).
+    Extract =
+    fun() ->
+	lists:filtermap(
+	    fun({Group, Opts}) ->
+		case proplists:get_value(all_users, Opts, false) orelse
+		     proplists:get_value(online_users, Opts, false) of
+		    true -> {true, Group};
+		    false -> false
+		end
+	    end,
+	    groups_with_opts(Host))
+    end,
+    Mod = gen_mod:db_mod(Host, ?MODULE),
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:lookup(
+		?SPECIAL_GROUPS_CACHE, {Host, false},
+		fun() ->
+		    {cache, Extract()}
+		end);
+	false ->
+	    Extract()
+    end.
+
 
 %% Get list of names of groups that have @online@ in the memberlist
 get_special_users_groups_online(Host) ->
-    lists:filtermap(fun ({Group, Opts}) ->
-             case proplists:get_value(online_users, Opts, false) of
-               true -> {true, Group};
-               false -> false
-             end
-         end,
-         groups_with_opts(Host)).
+    Extract =
+    fun() ->
+	lists:filtermap(
+	    fun({Group, Opts}) ->
+		case proplists:get_value(online_users, Opts, false) of
+		    true -> {true, Group};
+		    false -> false
+		end
+	    end,
+	    groups_with_opts(Host))
+    end,
+    Mod = gen_mod:db_mod(Host, ?MODULE),
+    case use_cache(Mod, Host) of
+	true ->
+	    ets_cache:lookup(
+		?SPECIAL_GROUPS_CACHE, {Host, true},
+		fun() ->
+		    {cache, Extract()}
+		end);
+	false ->
+	    Extract()
+    end.
 
 %% Given two lists of groupnames and their options,
 %% return the list of displayed groups to the second list
@@ -555,27 +684,32 @@ add_user_to_group2(Host, US, Group) ->
     {LUser, LServer} = US,
     case ejabberd_regexp:run(LUser, <<"^@.+@\$">>) of
       match ->
-	  GroupOpts = mod_shared_roster:get_group_opts(Host, Group),
+	  GroupOpts = get_group_opts(Host, Group),
 	  MoreGroupOpts = case LUser of
 			    <<"@all@">> -> [{all_users, true}];
 			    <<"@online@">> -> [{online_users, true}];
 			    _ -> []
 			  end,
-	  mod_shared_roster:set_group_opts(Host, Group,
-				   GroupOpts ++ MoreGroupOpts);
+	  set_group_opts(Host, Group,
+			 GroupOpts ++ MoreGroupOpts);
       nomatch ->
 	  DisplayedToGroups = displayed_to_groups(Group, Host),
 	  DisplayedGroups = get_displayed_groups(Group, LServer),
 	  push_user_to_displayed(LUser, LServer, Group, Host, both, DisplayedToGroups),
 	  push_displayed_to_user(LUser, LServer, Host, both, DisplayedGroups),
 	  Mod = gen_mod:db_mod(Host, ?MODULE),
+	  case use_cache(Mod, Host) of
+	      true ->
+		  ets_cache:delete(?USER_GROUPS_CACHE, {Host, US}, cache_nodes(Mod, Host)),
+		  ets_cache:delete(?GROUP_EXPLICIT_USERS_CACHE, {Host, Group}, cache_nodes(Mod, Host));
+	      false ->
+		  ok
+	  end,
 	  Mod:add_user_to_group(Host, US, Group)
     end.
 
 get_displayed_groups(Group, LServer) ->
-    GroupsOpts = groups_with_opts(LServer),
-    GroupOpts = proplists:get_value(Group, GroupsOpts, []),
-    proplists:get_value(displayed_groups, GroupOpts, []).
+    get_group_opt(LServer, Group, displayed_groups, []).
 
 push_displayed_to_user(LUser, LServer, Host, Subscription, DisplayedGroups) ->
     [push_members_to_user(LUser, LServer, DGroup, Host,
@@ -586,7 +720,7 @@ remove_user_from_group(Host, US, Group) ->
     {LUser, LServer} = US,
     case ejabberd_regexp:run(LUser, <<"^@.+@\$">>) of
       match ->
-	  GroupOpts = mod_shared_roster:get_group_opts(Host, Group),
+	  GroupOpts = get_group_opts(Host, Group),
 	  NewGroupOpts = case LUser of
 			   <<"@all@">> ->
 			       lists:filter(fun (X) -> X /= {all_users, true}
@@ -597,9 +731,16 @@ remove_user_from_group(Host, US, Group) ->
 					    end,
 					    GroupOpts)
 			 end,
-	  mod_shared_roster:set_group_opts(Host, Group, NewGroupOpts);
+	  set_group_opts(Host, Group, NewGroupOpts);
       nomatch ->
 	  Mod = gen_mod:db_mod(Host, ?MODULE),
+	  case use_cache(Mod, Host) of
+	      true ->
+		  ets_cache:delete(?USER_GROUPS_CACHE, {Host, US}, cache_nodes(Mod, Host)),
+		  ets_cache:delete(?GROUP_EXPLICIT_USERS_CACHE, {Host, Group}, cache_nodes(Mod, Host));
+	      false ->
+		  ok
+	  end,
 	  Result = Mod:remove_user_from_group(Host, US, Group),
 	  DisplayedToGroups = displayed_to_groups(Group, Host),
 	  DisplayedGroups = get_displayed_groups(Group, LServer),
@@ -610,12 +751,11 @@ remove_user_from_group(Host, US, Group) ->
 
 push_members_to_user(LUser, LServer, Group, Host,
 		     Subscription) ->
-    GroupsOpts = groups_with_opts(LServer),
-    GroupOpts = proplists:get_value(Group, GroupsOpts, []),
-    GroupName = proplists:get_value(name, GroupOpts, Group),
+    GroupOpts = get_group_opts(LServer, Group),
+    GroupLabel = proplists:get_value(label, GroupOpts, Group), %++
     Members = get_group_users(Host, Group),
     lists:foreach(fun ({U, S}) ->
-			  push_roster_item(LUser, LServer, U, S, GroupName,
+			  push_roster_item(LUser, LServer, U, S, GroupLabel,
 					   Subscription)
 		  end,
 		  Members).
@@ -645,12 +785,12 @@ push_user_to_members(User, Server, Subscription) ->
 						 Group),
 			  GroupOpts = proplists:get_value(Group, GroupsOpts,
 							  []),
-			  GroupName = proplists:get_value(name, GroupOpts,
+			  GroupLabel = proplists:get_value(label, GroupOpts,
 							  Group),
 			  lists:foreach(fun ({U, S}) ->
 						push_roster_item(U, S, LUser,
 								 LServer,
-								 GroupName,
+								 GroupLabel,
 								 Subscription)
 					end,
 					get_group_users(LServer, Group,
@@ -659,22 +799,20 @@ push_user_to_members(User, Server, Subscription) ->
 		  lists:usort(SpecialGroups ++ UserGroups)).
 
 push_user_to_displayed(LUser, LServer, Group, Host, Subscription, DisplayedToGroupsOpts) ->
-    GroupsOpts = groups_with_opts(Host),
-    GroupOpts = proplists:get_value(Group, GroupsOpts, []),
-    GroupName = proplists:get_value(name, GroupOpts, Group),
+    GroupLabel = get_group_opt(Host, Group, label, Group), %++
     [push_user_to_group(LUser, LServer, GroupD, Host,
-			GroupName, Subscription)
+			GroupLabel, Subscription)
      || GroupD <- DisplayedToGroupsOpts].
 
 push_user_to_group(LUser, LServer, Group, Host,
-		   GroupName, Subscription) ->
+		   GroupLabel, Subscription) ->
     lists:foreach(fun ({U, S})
 			  when (U == LUser) and (S == LServer) ->
 			  ok;
 		      ({U, S}) ->
 			  case lists:member(S, ejabberd_option:hosts()) of
 			      true ->
-				  push_roster_item(U, S, LUser, LServer, GroupName,
+				  push_roster_item(U, S, LUser, LServer, GroupLabel,
 						   Subscription);
 			      _ ->
 				  ok
@@ -699,12 +837,12 @@ push_item(User, Server, Item) ->
 			 Item).
 
 push_roster_item(User, Server, ContactU, ContactS,
-		 GroupName, Subscription) ->
+		 GroupLabel, Subscription) ->
     Item = #roster{usj =
 		       {User, Server, {ContactU, ContactS, <<"">>}},
 		   us = {User, Server}, jid = {ContactU, ContactS, <<"">>},
 		   name = <<"">>, subscription = Subscription, ask = none,
-		   groups = [GroupName]},
+		   groups = [GroupLabel]},
     push_item(User, Server, Item).
 
 -spec c2s_self_presence({presence(), ejabberd_c2s:state()})
@@ -722,13 +860,15 @@ unset_presence(LUser, LServer, Resource, Status) ->
     case length(Resources) of
       0 ->
 	  OnlineGroups = get_special_users_groups_online(LServer),
-	  lists:foreach(fun (OG) ->
-				push_user_to_displayed(LUser, LServer, OG,
-						       LServer, remove, displayed_to_groups(OG, LServer)),
-				push_displayed_to_user(LUser, LServer,
-						       LServer, remove, displayed_to_groups(OG, LServer))
-			end,
-			OnlineGroups);
+	  lists:foreach(
+	      fun(OG) ->
+		  DisplayedToGroups = displayed_to_groups(OG, LServer),
+		  push_user_to_displayed(LUser, LServer, OG,
+					 LServer, remove, DisplayedToGroups),
+		  push_displayed_to_user(LUser, LServer,
+					 LServer, remove, DisplayedToGroups)
+	      end,
+	      OnlineGroups);
       _ -> ok
     end.
 
@@ -756,9 +896,13 @@ webadmin_page(Acc, _, _) -> Acc.
 
 list_shared_roster_groups(Host, Query, Lang) ->
     Res = list_sr_groups_parse_query(Host, Query),
-    SRGroups = mod_shared_roster:list_groups(Host),
+    SRGroups = list_groups(Host),
     FGroups = (?XAE(<<"table">>, [],
 		    [?XE(<<"tbody">>,
+			 [?XE(<<"tr">>,
+				 [?X(<<"td">>),
+				  ?XE(<<"td">>, [?CT(?T("Name:"))])
+				  ])]++
 			 (lists:map(fun (Group) ->
 					    ?XE(<<"tr">>,
 						[?XE(<<"td">>,
@@ -775,12 +919,12 @@ list_shared_roster_groups(Host, Query, Lang) ->
 				 [?X(<<"td">>),
 				  ?XE(<<"td">>,
 				      [?INPUT(<<"text">>, <<"namenew">>,
-					      <<"">>)]),
-				  ?XE(<<"td">>,
-				      [?INPUTT(<<"submit">>, <<"addnew">>,
+					      <<"">>),
+				       ?C(<<" ">>),
+				       ?INPUTT(<<"submit">>, <<"addnew">>,
 					       ?T("Add New"))])])]))])),
     (?H1GL((translate:translate(Lang, ?T("Shared Roster Groups"))),
-	   <<"mod-shared-roster">>, <<"mod_shared_roster">>))
+	   <<"modules/#mod-shared-roster">>, <<"mod_shared_roster">>))
       ++
       case Res of
 	ok -> [?XREST(?T("Submitted"))];
@@ -791,7 +935,7 @@ list_shared_roster_groups(Host, Query, Lang) ->
 	[?XAE(<<"form">>,
 	      [{<<"action">>, <<"">>}, {<<"method">>, <<"post">>}],
 	      [FGroups, ?BR,
-	       ?INPUTT(<<"submit">>, <<"delete">>,
+	       ?INPUTTD(<<"submit">>, <<"delete">>,
 		       ?T("Delete Selected"))])].
 
 list_sr_groups_parse_query(Host, Query) ->
@@ -807,15 +951,17 @@ list_sr_groups_parse_query(Host, Query) ->
 list_sr_groups_parse_addnew(Host, Query) ->
     case lists:keysearch(<<"namenew">>, 1, Query) of
       {value, {_, Group}} when Group /= <<"">> ->
-	  mod_shared_roster:create_group(Host, Group), ok;
-      _ -> error
+	  create_group(Host, Group),
+	  ok;
+      _ ->
+	  error
     end.
 
 list_sr_groups_parse_delete(Host, Query) ->
-    SRGroups = mod_shared_roster:list_groups(Host),
+    SRGroups = list_groups(Host),
     lists:foreach(fun (Group) ->
 			  case lists:member({<<"selected">>, Group}, Query) of
-			    true -> mod_shared_roster:delete_group(Host, Group);
+			    true -> delete_group(Host, Group);
 			    _ -> ok
 			  end
 		  end,
@@ -825,15 +971,15 @@ list_sr_groups_parse_delete(Host, Query) ->
 shared_roster_group(Host, Group, Query, Lang) ->
     Res = shared_roster_group_parse_query(Host, Group,
 					  Query),
-    GroupOpts = mod_shared_roster:get_group_opts(Host, Group),
-    Name = get_opt(GroupOpts, name, <<"">>),
+    GroupOpts = get_group_opts(Host, Group),
+    Label = get_opt(GroupOpts, label, <<"">>), %%++
     Description = get_opt(GroupOpts, description, <<"">>),
     AllUsers = get_opt(GroupOpts, all_users, false),
     OnlineUsers = get_opt(GroupOpts, online_users, false),
     DisplayedGroups = get_opt(GroupOpts, displayed_groups,
 			      []),
-    Members = mod_shared_roster:get_group_explicit_users(Host,
-						 Group),
+    Members = get_group_explicit_users(Host,
+				       Group),
     FMembers = iolist_to_binary(
                  [if AllUsers -> <<"@all@\n">>;
                      true -> <<"">>
@@ -850,41 +996,51 @@ shared_roster_group(Host, Group, Query, Lang) ->
 		   [?XE(<<"tbody">>,
 			[?XE(<<"tr">>,
 			     [?XCT(<<"td">>, ?T("Name:")),
+			      ?XE(<<"td">>, [?C(Group)]),
+			      ?XE(<<"td">>, [?C(<<"">>)])]),
+			 ?XE(<<"tr">>,
+			     [?XCT(<<"td">>, ?T("Label:")),
 			      ?XE(<<"td">>,
-				  [?INPUT(<<"text">>, <<"name">>, Name)])]),
+				  [?INPUT(<<"text">>, <<"label">>, Label)]),
+			      ?XE(<<"td">>, [?CT(?T("Name in the rosters where this group will be displayed"))])]),
 			 ?XE(<<"tr">>,
 			     [?XCT(<<"td">>, ?T("Description:")),
 			      ?XE(<<"td">>,
 				  [?TEXTAREA(<<"description">>,
 					     integer_to_binary(lists:max([3,
                                                                                DescNL])),
-					     <<"20">>, Description)])]),
+					     <<"20">>, Description)]),
+			      ?XE(<<"td">>, [?CT(?T("Only admins can see this"))])
+]),
 			 ?XE(<<"tr">>,
 			     [?XCT(<<"td">>, ?T("Members:")),
 			      ?XE(<<"td">>,
 				  [?TEXTAREA(<<"members">>,
 					     integer_to_binary(lists:max([3,
                                                                                length(Members)+3])),
-					     <<"20">>, FMembers)])]),
+					     <<"20">>, FMembers)]),
+			      ?XE(<<"td">>, [?C(<<"JIDs, @all@, @online@">>)])
+]),
 			 ?XE(<<"tr">>,
-			     [?XCT(<<"td">>, ?T("Displayed Groups:")),
+			     [?XCT(<<"td">>, ?T("Displayed:")),
 			      ?XE(<<"td">>,
 				  [?TEXTAREA(<<"dispgroups">>,
 					     integer_to_binary(lists:max([3,											        length(FDisplayedGroups)])),
 					     <<"20">>,
-					     list_to_binary(FDisplayedGroups))])])])])),
+					     list_to_binary(FDisplayedGroups))]),
+			      ?XE(<<"td">>, [?CT(?T("Groups that will be displayed to the members"))])
+])])])),
     (?H1GL((translate:translate(Lang, ?T("Shared Roster Groups"))),
-	   <<"mod-shared-roster">>, <<"mod_shared_roster">>))
+	   <<"modules/#mod-shared-roster">>, <<"mod_shared_roster">>))
       ++
-      [?XC(<<"h2">>, <<(translate:translate(Lang, ?T("Group ")))/binary, Group/binary>>)] ++
+      [?XC(<<"h2">>, translate:translate(Lang, ?T("Group")))] ++
 	case Res of
 	  ok -> [?XREST(?T("Submitted"))];
-	  {error_jids, NonAddedList1} ->
-		NonAddedList2 = [jid:encode({U,S,<<>>}) || {U,S} <- NonAddedList1],
-		NonAddedList3 = str:join(NonAddedList2, <<", ">>),
-		NonAddedText1 = translate:translate(Lang, ?T("Members not added (inexistent vhost): ")),
-		NonAddedText2 = str:concat(NonAddedText1, NonAddedList3),
-		[?XRES(NonAddedText2)];
+	  {error_elements, NonAddedList1, NG1} ->
+		make_error_el(Lang,
+		    ?T("Members not added (inexistent vhost!): "),
+		    [jid:encode({U,S,<<>>}) || {U,S} <- NonAddedList1])
+		++ make_error_el(Lang, ?T("'Displayed groups' not added (they do not exist!): "), NG1);
 	  error -> [?XREST(?T("Bad format"))];
 	  nothing -> []
 	end
@@ -894,28 +1050,37 @@ shared_roster_group(Host, Group, Query, Lang) ->
 		[FGroup, ?BR,
 		 ?INPUTT(<<"submit">>, <<"submit">>, ?T("Submit"))])].
 
+make_error_el(_, _, []) ->
+    [];
+make_error_el(Lang, Message, BinList) ->
+    NG2 = str:join(BinList, <<", ">>),
+    NG3 = translate:translate(Lang, Message),
+    NG4 = str:concat(NG3, NG2),
+    [?XRES(NG4)].
+
 shared_roster_group_parse_query(Host, Group, Query) ->
     case lists:keysearch(<<"submit">>, 1, Query) of
       {value, _} ->
-	  {value, {_, Name}} = lists:keysearch(<<"name">>, 1,
-					       Query),
+	  {value, {_, Label}} = lists:keysearch(<<"label">>, 1,
+					       Query), %++
 	  {value, {_, Description}} =
 	      lists:keysearch(<<"description">>, 1, Query),
 	  {value, {_, SMembers}} = lists:keysearch(<<"members">>,
 						   1, Query),
 	  {value, {_, SDispGroups}} =
 	      lists:keysearch(<<"dispgroups">>, 1, Query),
-	  NameOpt = if Name == <<"">> -> [];
-		       true -> [{name, Name}]
+	  LabelOpt = if Label == <<"">> -> [];
+		       true -> [{label, Label}] %++
 		    end,
 	  DescriptionOpt = if Description == <<"">> -> [];
 			      true -> [{description, Description}]
 			   end,
-	  DispGroups = str:tokens(SDispGroups, <<"\r\n">>),
+	  DispGroups1 = str:tokens(SDispGroups, <<"\r\n">>),
+	  {DispGroups, WrongDispGroups} = filter_groups_existence(Host, DispGroups1),
 	  DispGroupsOpt = if DispGroups == [] -> [];
 			     true -> [{displayed_groups, DispGroups}]
 			  end,
-	  OldMembers = mod_shared_roster:get_group_explicit_users(Host,
+	  OldMembers = get_group_explicit_users(Host,
 							  Group),
 	  SJIDs = str:tokens(SMembers, <<", \r\n">>),
 	  NewMembers = lists:foldl(fun (_SJID, error) -> error;
@@ -950,29 +1115,31 @@ shared_roster_group_parse_query(Host, Group, Query) ->
 	  RemovedDisplayedGroups = CurrentDisplayedGroups -- DispGroups,
 	  displayed_groups_update(OldMembers, RemovedDisplayedGroups, remove),
 	  displayed_groups_update(OldMembers, AddedDisplayedGroups, both),
-	  mod_shared_roster:set_group_opts(Host, Group,
-				   NameOpt ++
-				     DispGroupsOpt ++
-				       DescriptionOpt ++
-					 AllUsersOpt ++ OnlineUsersOpt),
+	  set_group_opts(Host, Group,
+			 LabelOpt ++
+			 DispGroupsOpt ++
+			 DescriptionOpt ++
+			 AllUsersOpt ++ OnlineUsersOpt),
 	  if NewMembers == error -> error;
 	     true ->
 		 AddedMembers = NewMembers -- OldMembers,
 		 RemovedMembers = OldMembers -- NewMembers,
-		 lists:foreach(fun (US) ->
-				       mod_shared_roster:remove_user_from_group(Host,
-									US,
-									Group)
-			       end,
-			       RemovedMembers),
-		 NonAddedMembers = lists:filter(fun (US) ->
-				       error == mod_shared_roster:add_user_to_group(Host, US,
-								   Group)
-			       end,
-			       AddedMembers),
-		 case NonAddedMembers of
-		    [] -> ok;
-		    _ -> {error_jids, NonAddedMembers}
+		 lists:foreach(
+		     fun(US) ->
+			 remove_user_from_group(Host,
+						US,
+						Group)
+		     end,
+		     RemovedMembers),
+		 NonAddedMembers = lists:filter(
+		     fun(US) ->
+			 error == add_user_to_group(Host, US,
+						    Group)
+		     end,
+		     AddedMembers),
+		 case (NonAddedMembers /= []) or (WrongDispGroups /= []) of
+		    true -> {error_elements, NonAddedMembers, WrongDispGroups};
+		    false -> ok
 		 end
 	  end;
       _ -> nothing
@@ -993,6 +1160,11 @@ split_grouphost(Host, Group) ->
       [_] -> {Host, Group}
     end.
 
+filter_groups_existence(Host, Groups) ->
+    lists:partition(
+	fun(Group) -> error /= get_group_opts(Host, Group) end,
+	Groups).
+
 displayed_groups_update(Members, DisplayedGroups, Subscription) ->
     lists:foreach(
       fun({U, S}) ->
@@ -1001,8 +1173,10 @@ displayed_groups_update(Members, DisplayedGroups, Subscription) ->
 
 opts_to_binary(Opts) ->
     lists:map(
-      fun({name, Name}) ->
-              {name, iolist_to_binary(Name)};
+      fun({label, Label}) ->
+              {label, iolist_to_binary(Label)};
+         ({name, Label}) -> % For SQL backwards compat with ejabberd 20.03 and older
+              {label, iolist_to_binary(Label)};
          ({description, Desc}) ->
               {description, iolist_to_binary(Desc)};
          ({displayed_groups, Gs}) ->
@@ -1027,10 +1201,22 @@ import(LServer, {sql, _}, DBType, Tab, L) ->
     Mod:import(LServer, Tab, L).
 
 mod_opt_type(db_type) ->
-    econf:db_type(?MODULE).
+    econf:db_type(?MODULE);
+mod_opt_type(use_cache) ->
+    econf:bool();
+mod_opt_type(cache_size) ->
+    econf:pos_int(infinity);
+mod_opt_type(cache_missed) ->
+    econf:bool();
+mod_opt_type(cache_life_time) ->
+    econf:timeout(second, infinity).
 
 mod_options(Host) ->
-    [{db_type, ejabberd_config:default_db(Host, ?MODULE)}].
+    [{db_type, ejabberd_config:default_db(Host, ?MODULE)},
+     {use_cache, ejabberd_option:use_cache(Host)},
+     {cache_size, ejabberd_option:cache_size(Host)},
+     {cache_missed, ejabberd_option:cache_missed(Host)},
+     {cache_life_time, ejabberd_option:cache_life_time(Host)}].
 
 mod_doc() ->
     #{desc =>
@@ -1047,9 +1233,10 @@ mod_doc() ->
 	      "not replace the standard roster. Instead, the shared roster "
 	      "contacts are merged to the relevant users at retrieval time. "
 	      "The standard user rosters thus stay unmodified."), "",
-	   ?T("Shared roster groups can be edited only via the Web Admin. "
-	      "Each group has unique identification and those parameters:"), "",
-	   ?T("- Name: The group's name will be displayed in the roster."), "",
+	   ?T("Shared roster groups can be edited via the Web Admin, "
+	      "and some API commands called 'srg_*'. "
+	      "Each group has a unique name and those parameters:"), "",
+	   ?T("- Label: Used in the rosters where this group is displayed."),"",
 	   ?T("- Description: of the group, which has no effect."), "",
 	   ?T("- Members: A list of JIDs of group members, entered one per "
 	      "line in the Web Admin. The special member directive '@all@' "
@@ -1059,7 +1246,7 @@ mod_doc() ->
 	      "represents the online users in the virtual host. With those "
 	      "two directives, the actual list of members in those shared "
 	      "rosters is generated dynamically at retrieval time."), "",
-	   ?T("- Displayed groups: A list of groups that will be in the "
+	   ?T("- Displayed: A list of groups that will be in the "
 	      "rosters of this group's members. A group of other vhost can "
 	      "be identified with 'groupid@vhost'."), "",
 	   ?T("This module depends on 'mod_roster'. "
@@ -1072,13 +1259,29 @@ mod_doc() ->
 		     "the tables and store user information. The default is "
 		     "the storage defined by the global option 'default_db', "
 		     "or 'mnesia' if omitted. If 'sql' value is defined, "
-		     "make sure you have defined the database.")}}],
+		     "make sure you have defined the database.")}},
+	   {use_cache,
+            #{value => "true | false",
+              desc =>
+                  ?T("Same as top-level 'use_cache' option, but applied to this module only.")}},
+           {cache_size,
+            #{value => "pos_integer() | infinity",
+              desc =>
+                  ?T("Same as top-level 'cache_size' option, but applied to this module only.")}},
+           {cache_missed,
+            #{value => "true | false",
+              desc =>
+                  ?T("Same as top-level 'cache_missed' option, but applied to this module only.")}},
+           {cache_life_time,
+            #{value => "timeout()",
+              desc =>
+                  ?T("Same as top-level 'cache_life_time' option, but applied to this module only.")}}],
       example =>
 	  [{?T("Take the case of a computer club that wants all its members "
 	       "seeing each other in their rosters. To achieve this, they "
 	       "need to create a shared roster group similar to this one:"),
-	    ["Identification: club_members",
-	     "Name: Club Members",
+	    ["Name: club_members",
+	     "Label: Club Members",
 	     "Description: Members from the computer club",
 	     "Members: member1@example.org, member2@example.org, member3@example.org",
 	     "Displayed Groups: club_members"]},
@@ -1090,24 +1293,24 @@ mod_doc() ->
 	       "should see all managers. This scenario can be achieved by "
 	       "creating shared roster groups as shown in the following lists:"),
 	    ["First list:",
-	     "Identification: management",
-	     "Name: Management",
+	     "Name: management",
+	     "Label: Management",
 	     "Description: Management",
 	     "Members: manager1@example.org, manager2@example.org",
-	     "Displayed Groups: management, marketing, sales",
+	     "Displayed: management, marketing, sales",
 	     "",
 	     "Second list:",
-	     "Identification: marketing",
-	     "Name: Marketing",
+	     "Name: marketing",
+	     "Label: Marketing",
 	     "Description: Marketing",
 	     "Members: marketeer1@example.org, marketeer2@example.org, marketeer3@example.org",
-	     "Displayed Groups: management, marketing",
+	     "Displayed: management, marketing",
 	     "",
 	     "Third list:",
-	     "Identification: sales",
-	     "Name: Sales",
+	     "Name: sales",
+	     "Label: Sales",
 	     "Description: Sales",
 	     "Members: salesman1@example.org, salesman2@example.org, salesman3@example.org",
-	     "Displayed Groups: management, sales"
+	     "Displayed: management, sales"
 	    ]}
 	  ]}.

@@ -65,6 +65,14 @@
 -define(INPUTT(Type, Name, Value),
 	?INPUT(Type, Name, (translate:translate(Lang, Value)))).
 
+-define(INPUTD(Type, Name, Value),
+	?XA(<<"input">>,
+	    [{<<"type">>, Type}, {<<"name">>, Name},
+             {<<"class">>, <<"btn-danger">>}, {<<"value">>, Value}])).
+
+-define(INPUTTD(Type, Name, Value),
+	?INPUTD(Type, Name, (translate:translate(Lang, Value)))).
+
 -define(INPUTS(Type, Name, Value, Size),
 	?XA(<<"input">>,
 	    [{<<"type">>, Type}, {<<"name">>, Name},
@@ -93,9 +101,9 @@
 -define(GL(Ref, Title),
 	?XAE(<<"div">>, [{<<"class">>, <<"guidelink">>}],
 	     [?XAE(<<"a">>,
-		   [{<<"href">>, <<"https://docs.ejabberd.im/admin/configuration/#", Ref/binary>>},
+		   [{<<"href">>, <<"https://docs.ejabberd.im/admin/configuration/", Ref/binary>>},
 		    {<<"target">>, <<"_blank">>}],
-		   [?C(<<"[Guide: ", Title/binary, "]">>)])])).
+		   [?C(<<"docs: ", Title/binary>>)])])).
 
 %% h1 with a Guide Link
 -define(H1GL(Name, Ref, Title),

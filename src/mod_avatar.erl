@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Evgeny Khramtsov <ekhramtsov@process-one.net>
+%%% Author  : Evgeny Khramtsov <ekhramtsov@process-one.net>
 %%% Created : 13 Sep 2017 by Evgeny Khramtsov <ekhramtsov@process-one.net>
 %%%
 %%%
@@ -31,7 +31,7 @@
 -export([pubsub_publish_item/6, vcard_iq_convert/1, vcard_iq_publish/1,
 	 get_sm_features/5]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 -include("pubsub.hrl").
 -include("translate.hrl").
@@ -481,12 +481,9 @@ mod_doc() ->
                      "the list of supported formats is detected at compile time "
                      "depending on the image libraries installed in the system."),
               example =>
-                  [{?T("In this example avatars in WebP format are "
-                       "converted to JPEG, all other formats are "
-                       "converted to PNG:"),
                     ["convert:",
                      "  webp: jpg",
-                     "  default: png"]}]}},
+                     "  default: png"]}},
            {rate_limit,
             #{value => ?T("Number"),
               desc =>

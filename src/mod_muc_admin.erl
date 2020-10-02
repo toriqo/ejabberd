@@ -44,7 +44,7 @@
 	 web_page_host/3, mod_options/1, get_commands_spec/0, find_hosts/1]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("mod_muc.hrl").
 -include("mod_muc_room.hrl").
 -include("ejabberd_http.hrl").
@@ -459,7 +459,7 @@ web_page_main(_, #request{path=[<<"muc">>], lang = Lang} = _Request) ->
 				  Acc + mod_muc:count_online_rooms(Host)
 			  end, 0, find_hosts(global)),
     PageTitle = translate:translate(Lang, ?T("Multi-User Chat")),
-    Res = ?H1GL(PageTitle, <<"mod-muc">>, <<"mod_muc">>) ++
+    Res = ?H1GL(PageTitle, <<"modules/#mod-muc">>, <<"mod_muc">>) ++
 	  [?XCT(<<"h3">>, ?T("Statistics")),
 	   ?XAE(<<"table">>, [],
 		[?XE(<<"tbody">>, [?TDTD(?T("Total rooms"), OnlineRoomsNumber)
@@ -494,8 +494,8 @@ get_sort_query(Q) ->
     end.
 
 get_sort_query2(Q) ->
-    {value, {_, String}} = lists:keysearch(<<"sort">>, 1, Q),
-    Integer = binary_to_integer(String),
+    {value, {_, Binary}} = lists:keysearch(<<"sort">>, 1, Q),
+    Integer = list_to_integer(string:strip(binary_to_list(Binary), right, $/)),
     case Integer >= 0 of
 	true -> {ok, {normal, Integer}};
 	false -> {ok, {reverse, abs(Integer)}}
@@ -511,14 +511,14 @@ make_rooms_page(Host, Lang, {Sort_direction, Sort_column}) ->
 	      fun(Room) ->
 		      ?XE(<<"tr">>, [?XC(<<"td">>, E) || E <- Room])
 	      end, Rooms_prepared),
-    Titles = [<<"Jabber ID">>,
-	      <<"# participants">>,
-	      <<"Last message">>,
-	      <<"Public">>,
-	      <<"Persistent">>,
-	      <<"Logging">>,
-	      <<"Just created">>,
-	      <<"Room title">>],
+    Titles = [?T("Jabber ID"),
+	      ?T("# participants"),
+	      ?T("Last message"),
+	      ?T("Public"),
+	      ?T("Persistent"),
+	      ?T("Logging"),
+	      ?T("Just created"),
+	      ?T("Room title")],
     {Titles_TR, _} =
 	lists:mapfoldl(
 	  fun(Title, Num_column) ->
@@ -533,7 +533,7 @@ make_rooms_page(Host, Lang, {Sort_direction, Sort_column}) ->
 	  1,
 	  Titles),
     PageTitle = translate:translate(Lang, ?T("Multi-User Chat")),
-    ?H1GL(PageTitle, <<"mod-muc">>, <<"mod_muc">>) ++
+    ?H1GL(PageTitle, <<"modules/#mod-muc">>, <<"mod_muc">>) ++
     [?XCT(<<"h2">>, ?T("Chatrooms")),
      ?XE(<<"table">>,
 	 [?XE(<<"thead">>,
@@ -627,9 +627,10 @@ justcreated_to_binary(J) when is_atom(J) ->
 create_room(Name1, Host1, ServerHost) ->
     create_room_with_opts(Name1, Host1, ServerHost, []).
 
-create_room_with_opts(Name1, Host1, ServerHost, CustomRoomOpts) ->
+create_room_with_opts(Name1, Host1, ServerHost1, CustomRoomOpts) ->
     true = (error /= (Name = jid:nodeprep(Name1))),
     true = (error /= (Host = jid:nodeprep(Host1))),
+    true = (error /= (ServerHost = jid:nodeprep(ServerHost1))),
 
     %% Get the default room options from the muc configuration
     DefRoomOpts = mod_muc_opt:default_room_options(ServerHost),
@@ -805,7 +806,7 @@ get_rooms(ServiceArg) ->
     Hosts = find_services(ServiceArg),
     lists:flatmap(
       fun(Host) ->
-	      [{RoomName, RoomHost, Host, Pid}
+	      [{RoomName, RoomHost, ejabberd_router:host_of_route(Host), Pid}
 	       || {RoomName, RoomHost, Pid} <- mod_muc:get_online_rooms(Host)]
       end, Hosts).
 
@@ -988,13 +989,22 @@ send_direct_invitation(FromJid, UserJid, Msg) ->
 %% the option to change (for example title or max_users),
 %% and the value to assign to the new option.
 %% For example:
-%%   change_room_option(<<"testroom">>, <<"conference.localhost">>, <<"title">>, <<"Test Room">>)
+%% `change_room_option(<<"testroom">>, <<"conference.localhost">>, <<"title">>, <<"Test Room">>)'
 change_room_option(Name, Service, OptionString, ValueString) ->
     case get_room_pid(Name, Service) of
 	room_not_found ->
 	    room_not_found;
 	Pid ->
 	    {Option, Value} = format_room_option(OptionString, ValueString),
+	    change_room_option(Pid, Option, Value)
+    end.
+
+change_room_option(Pid, Option, Value) ->
+    case {Option,
+	  gen_mod:is_loaded((get_room_state(Pid))#state.server_host, mod_muc_log)} of
+	{logging, false} ->
+	    mod_muc_log_not_enabled;
+	_ ->
 	    Config = get_room_config(Pid),
 	    Config2 = change_option(Option, Value, Config),
 	    {ok, _} = mod_muc_room:set_config(Pid, Config2),

@@ -38,10 +38,10 @@
 -export([handle_unexpected_info/2, handle_unexpected_cast/2,
 	 reject_unauthenticated_packet/2, process_closed/2]).
 %% API
--export([stop/1, close/1, close/2, send/2, update_state/2, establish/1,
+-export([stop_async/1, close/1, close/2, send/2, update_state/2, establish/1,
 	 host_up/1, host_down/1]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 
 -type state() :: xmpp_stream_in:state().
@@ -64,8 +64,9 @@ close(Ref) ->
 close(Ref, Reason) ->
     xmpp_stream_in:close(Ref, Reason).
 
-stop(Ref) ->
-    xmpp_stream_in:stop(Ref).
+-spec stop_async(pid()) -> ok.
+stop_async(Pid) ->
+    xmpp_stream_in:stop_async(Pid).
 
 accept(Ref) ->
     xmpp_stream_in:accept(Ref).
@@ -130,7 +131,8 @@ process_closed(#{server := LServer} = State, Reason) ->
 	      end,
     ?INFO_MSG("Closing inbound s2s connection ~ts -> ~ts: ~ts",
 	      [RServer, LServer, xmpp_stream_out:format_error(Reason)]),
-    stop(State).
+    stop_async(self()),
+    State.
 
 %%%===================================================================
 %%% xmpp_stream_in callbacks
@@ -349,4 +351,4 @@ listen_options() ->
      {tls, false},
      {tls_compression, false},
      {max_stanza_size, infinity},
-     {max_fsm_queue, 5000}].
+     {max_fsm_queue, 10000}].

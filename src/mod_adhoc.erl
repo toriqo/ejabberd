@@ -39,7 +39,7 @@
 	 mod_options/1, mod_doc/0]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("translate.hrl").
 
 start(Host, _Opts) ->
@@ -288,5 +288,5 @@ mod_doc() ->
           [{report_commands_node,
             #{value => "true | false",
               desc =>
-                  ?T("Provide the Commands item in the Service Disvocery. "
+                  ?T("Provide the Commands item in the Service Discovery. "
 		     "Default value: 'false'.")}}]}.

@@ -4,6 +4,7 @@ include_config_file:
   - ejabberd.ldap.yml
   - ejabberd.mnesia.yml
   - ejabberd.mysql.yml
+  - ejabberd.mssql.yml
   - ejabberd.pgsql.yml
   - ejabberd.redis.yml
   - ejabberd.sqlite.yml
@@ -12,6 +13,7 @@ host_config:
   pgsql.localhost: PGSQL_CONFIG
   sqlite.localhost: SQLITE_CONFIG
   mysql.localhost: MYSQL_CONFIG
+  mssql.localhost: MSSQL_CONFIG
   mnesia.localhost: MNESIA_CONFIG
   redis.localhost: REDIS_CONFIG
   ldap.localhost: LDAP_CONFIG
@@ -26,6 +28,7 @@ hosts:
   - mnesia.localhost
   - redis.localhost
   - mysql.localhost
+  - mssql.localhost
   - pgsql.localhost
   - extauth.localhost
   - ldap.localhost
@@ -66,6 +69,8 @@ access_rules:
 acl:
   local:
     user_regexp: ""
+  admin:
+    user: "admin"
 language: en
 listen:
   -
@@ -84,9 +89,16 @@ listen:
     port: WEB_PORT
     module: ejabberd_http
     request_handlers:
+      "/admin": ejabberd_web_admin
       "/api": mod_http_api
       "/upload": mod_http_upload
       "/captcha": ejabberd_captcha
+  -
+    port: STUN_PORT
+    module: ejabberd_stun
+    transport: udp
+    use_turn: true
+    turn_ipv4_address: "203.0.113.3"
   -
     port: COMPONENT_PORT
     module: ejabberd_service
@@ -121,6 +133,12 @@ Welcome to this XMPP server."
   mod_stream_mgmt:
     max_ack_queue: 10
     resume_timeout: 3
+  mod_stun_disco:
+    secret: "cryptic"
+    services:
+      -
+        host: "example.com"
+        type: turns
   mod_time: []
   mod_version: []
   mod_http_upload:
@@ -130,7 +148,6 @@ Welcome to this XMPP server."
     max_size: 10000
     vcard: VCARD
 registration_timeout: infinity
-route_subdomains: s2s
 s2s_use_starttls: false
 ca_file: CAFILE
 c2s_cafile: CAFILE

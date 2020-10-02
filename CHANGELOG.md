@@ -1,3 +1,50 @@
+# Version 20.07
+
+* Changes in this version
+- Add support for using unix sockets in listeners.
+- Make this version compatible with erlang R23
+- Make room permissions checks more strict for subscribers
+- Fix problem with muc rooms crashing when using muc logger
+  with some locales
+- Limit stat calls that logger module issues
+- Don't throw errors when using user_regexp acl rule and
+  having non-matching host
+- Fix problem with leaving old data when updating shared rosters
+- Fix edge case that caused failure of resuming old sessions with
+  stream management.
+- Fix crash when room that was started with loging enabled was later
+  changed to logging disabled
+- Increase default shaper limits (this should help with delays for
+  clients that are using jingle)
+- Fix couple compatibility problems which prevented working on 
+  erlang R19
+- Fix sending presence unavailable when session terminates for
+  clients that only send directed presences (helps with sometimes
+  not leaving muc rooms on disconnect).
+- Prevent supervisor errors for sockets that were closed before
+  they were passed to handler modules
+- Make stun module work better with ipv6 addresses
+
+# Version 20.03
+
+* Changes in this version
+- Add support of ssl connection when connection to mysql
+  database (configured with `sql_ssl: true` option)
+- Experimental support for cockroachdb when configured
+  with postgres connector 
+- Add cache and optimize queries issued by `mod_shared_roster`,
+  this should greatly improve performance of this module when
+  used with `sql` backend
+- Fix problem with accessing webadmin
+- Make webadmin work even when url is missing trailing slash
+- When compiling external modules with ext_mod, use flags
+  that were detected during compilation of ejabberd
+- Make config changed to ldap options be updated when issued
+  `reload_config` command
+- Fix `room_empty_destory` command
+- Fix reporting errors in `send_stanza` command when xml
+  passed to it couldn't be passed correctly
+
 # Version 20.02
 
 * Changes in this version

@@ -54,7 +54,7 @@
 	 depends/2, set_item_and_notify_clients/3]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("mod_roster.hrl").
 -include("ejabberd_http.hrl").
 -include("ejabberd_web_admin.hrl").
@@ -708,6 +708,30 @@ in_state_change(both, none, subscribe) -> none;
 in_state_change(both, none, subscribed) -> none;
 in_state_change(both, none, unsubscribe) -> {to, none};
 in_state_change(both, none, unsubscribed) ->
+    {from, none};
+% Invalid states that can occurs from roster modification from API
+in_state_change(to, out, subscribe) -> {to, in};
+in_state_change(to, out, subscribed) -> none;
+in_state_change(to, out, unsubscribe) -> none;
+in_state_change(to, out, unsubscribed) -> {none, none};
+in_state_change(to, both, subscribe) -> none;
+in_state_change(to, both, subscribed) -> none;
+in_state_change(to, both, unsubscribe) -> {to, none};
+in_state_change(to, both, unsubscribed) -> {none, in};
+in_state_change(from, in, subscribe) -> none;
+in_state_change(from, in, subscribed) -> {both, none};
+in_state_change(from, in, unsubscribe) ->
+    {none, none};
+in_state_change(from, in, unsubscribed) -> none;
+in_state_change(from, both, subscribe) -> none;
+in_state_change(from, both, subscribed) -> {both, none};
+in_state_change(from, both, unsubscribe) -> {none, out};
+in_state_change(from, both, unsubscribed) ->
+    {from, none};
+in_state_change(both, _, subscribe) -> none;
+in_state_change(both, _, subscribed) -> none;
+in_state_change(both, _, unsubscribe) -> {to, none};
+in_state_change(both, _, unsubscribed) ->
     {from, none}.
 
 out_state_change(none, none, subscribe) -> {none, out};
@@ -715,8 +739,7 @@ out_state_change(none, none, subscribed) -> none;
 out_state_change(none, none, unsubscribe) -> none;
 out_state_change(none, none, unsubscribed) -> none;
 out_state_change(none, out, subscribe) ->
-    {none,
-     out}; %% We need to resend query (RFC3921, section 9.2)
+    {none, out}; %% We need to resend query (RFC3921, section 9.2)
 out_state_change(none, out, subscribed) -> none;
 out_state_change(none, out, unsubscribe) ->
     {none, none};
@@ -755,6 +778,32 @@ out_state_change(both, none, subscribed) -> none;
 out_state_change(both, none, unsubscribe) ->
     {from, none};
 out_state_change(both, none, unsubscribed) ->
+    {to, none};
+% Invalid states that can occurs from roster modification from API
+out_state_change(to, out, subscribe) -> none;
+out_state_change(to, out, subscribed) -> {both, none};
+out_state_change(to, out, unsubscribe) -> {none, none};
+out_state_change(to, out, unsubscribed) -> none;
+out_state_change(to, both, subscribe) -> none;
+out_state_change(to, both, subscribed) -> {both, none};
+out_state_change(to, both, unsubscribe) -> {none, in};
+out_state_change(to, both, unsubscribed) -> {to, none};
+out_state_change(from, in, subscribe) -> {from, out};
+out_state_change(from, in, subscribed) -> none;
+out_state_change(from, in, unsubscribe) -> none;
+out_state_change(from, in, unsubscribed) ->
+    {none, none};
+out_state_change(from, both, subscribe) -> none;
+out_state_change(from, both, subscribed) -> none;
+out_state_change(from, both, unsubscribe) ->
+    {from, none};
+out_state_change(from, both, unsubscribed) ->
+    {none, out};
+out_state_change(both, _, subscribe) -> none;
+out_state_change(both, _, subscribed) -> none;
+out_state_change(both, _, unsubscribe) ->
+    {from, none};
+out_state_change(both, _, unsubscribed) ->
     {to, none}.
 
 in_auto_reply(from, none, subscribe) -> subscribed;
@@ -997,7 +1046,7 @@ user_roster(User, Server, Query, Lang) ->
 						     ?XAE(<<"td">>,
 							  [{<<"class">>,
 							    <<"valign">>}],
-							  [?INPUTT(<<"submit">>,
+							  [?INPUTTD(<<"submit">>,
 								   <<"remove",
 								     (ejabberd_web_admin:term_to_id(R#roster.jid))/binary>>,
 								   ?T("Remove"))])])
@@ -1005,7 +1054,7 @@ user_roster(User, Server, Query, Lang) ->
 					SItems)))])]
 	     end,
     PageTitle = str:format(translate:translate(Lang, ?T("Roster of ~ts")), [us_to_list(US)]),
-    (?H1GL(PageTitle, <<"mod-roster">>, <<"mod_roster">>))
+    (?H1GL(PageTitle, <<"modules/#mod-roster">>, <<"mod_roster">>))
       ++
       case Res of
 	ok -> [?XREST(?T("Submitted"))];
@@ -1117,9 +1166,15 @@ user_roster_item_parse_query(User, Server, Items,
 us_to_list({User, Server}) ->
     jid:encode({User, Server, <<"">>}).
 
-webadmin_user(Acc, _User, _Server, Lang) ->
+webadmin_user(Acc, User, Server, Lang) ->
+    QueueLen = length(get_roster(jid:nodeprep(User), jid:nameprep(Server))),
+    FQueueLen = ?C(integer_to_binary(QueueLen)),
+    FQueueView = ?AC(<<"roster/">>, ?T("View Roster")),
     Acc ++
-      [?XE(<<"h3">>, [?ACT(<<"roster/">>, ?T("Roster"))])].
+        [?XCT(<<"h3">>, ?T("Roster:")),
+         FQueueLen,
+         ?C(<<"  |   ">>),
+         FQueueView].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -spec has_duplicated_groups([binary()]) -> boolean().

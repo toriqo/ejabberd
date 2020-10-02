@@ -51,7 +51,7 @@
 	 announce_all_hosts_motd_delete/1]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("mod_announce.hrl").
 -include("translate.hrl").
 
@@ -925,31 +925,35 @@ mod_doc() ->
               "Configured users can perform these actions with an XMPP "
               "client either using Ad-hoc Commands or sending messages "
               "to specific JIDs."), "",
+	   ?T("Note that this module can be resource intensive on large "
+	      "deployments as it may broadcast a lot of messages. This module "
+	      "should be disabled for instances of ejabberd with hundreds of "
+	      "thousands users."), "",
            ?T("The Ad-hoc Commands are listed in the Server Discovery. "
               "For this feature to work, 'mod_adhoc' must be enabled."), "",
            ?T("The specific JIDs where messages can be sent are listed below. "
               "The first JID in each entry will apply only to the specified "
               "virtual host example.org, while the JID between brackets "
               "will apply to all virtual hosts in ejabberd:"), "",
-           "example.org/announce/all (example.org/announce/all-hosts/all)::",
+           "- example.org/announce/all (example.org/announce/all-hosts/all)::",
            ?T("The message is sent to all registered users. If the user is "
               "online and connected to several resources, only the resource "
               "with the highest priority will receive the message. "
               "If the registered user is not connected, the message will be "
               "stored offline in assumption that offline storage (see 'mod_offline') "
               "is enabled."),
-           "example.org/announce/online (example.org/announce/all-hosts/online)::",
+           "- example.org/announce/online (example.org/announce/all-hosts/online)::",
            ?T("The message is sent to all connected users. If the user is "
               "online and connected to several resources, all resources will "
               "receive the message."),
-           "example.org/announce/motd (example.org/announce/all-hosts/motd)::",
+           "- example.org/announce/motd (example.org/announce/all-hosts/motd)::",
            ?T("The message is set as the message of the day (MOTD) and is sent "
               "to users when they login. In addition the message is sent to all "
               "connected users (similar to announce/online)."),
-           "example.org/announce/motd/update (example.org/announce/all-hosts/motd/update)::",
+           "- example.org/announce/motd/update (example.org/announce/all-hosts/motd/update)::",
            ?T("The message is set as message of the day (MOTD) and is sent to users "
               "when they login. The message is not sent to any currently connected user."),
-           "example.org/announce/motd/delete (example.org/announce/all-hosts/motd/delete)::",
+           "- example.org/announce/motd/delete (example.org/announce/all-hosts/motd/delete)::",
            ?T("Any message sent to this JID removes the existing message of the day (MOTD).")],
       opts =>
           [{access,

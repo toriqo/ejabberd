@@ -27,7 +27,7 @@
 -module (mod_carboncopy).
 
 -author ('ecestari@process-one.net').
--protocol({xep, 280, '0.8'}).
+-protocol({xep, 280, '0.13.2'}).
 
 -behaviour(gen_mod).
 
@@ -42,7 +42,7 @@
 -export([list/2]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("translate.hrl").
 
 -type direction() :: sent | received.
@@ -268,7 +268,7 @@ is_received_muc_invite(Msg, received) ->
 	#muc_user{invites = [_|_]} ->
 	    true;
 	_ ->
-	    xmpp:has_subtag(Msg, #x_conference{})
+	    xmpp:has_subtag(Msg, #x_conference{jid = jid:make(<<"">>)})
     end.
 
 -spec is_received_muc_pm(jid(), message(), direction()) -> boolean().

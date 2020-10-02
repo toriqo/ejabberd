@@ -4,8 +4,7 @@
 main(Paths) ->
     Dict = fold_erls(
 	     fun(File, Tokens, Acc) ->
-		     File1 = filename:rootname(filename:basename(File)),
-		     extract_tr(File1, Tokens, Acc)
+		     extract_tr(File, Tokens, Acc)
 	     end, dict:new(), Paths),
     generate_pot(Dict).
 
@@ -17,10 +16,22 @@ extract_tr(File, [{'?', _}, {var, _, 'T'}, {'(', Line}|Tokens], Acc) ->
 	{String, Tokens1} ->
 	    extract_tr(File, Tokens1, dict:append(String, {File, Line}, Acc))
     end;
+extract_tr(_File, [{atom,_,module}, {'(',_}, {atom,_,ejabberd_doc} | _Tokens], Acc) ->
+    Acc;
+extract_tr(File, [{atom, _, F}, {'(',_} | Tokens], Acc)
+    when (F == mod_doc); (F == doc) ->
+    Tokens2 = consume_tokens_until_dot(Tokens),
+    extract_tr(File, Tokens2, Acc);
 extract_tr(File, [_|Tokens], Acc) ->
+    %%err("~p~n", [A]),
     extract_tr(File, Tokens, Acc);
 extract_tr(_, [], Acc) ->
     Acc.
+
+consume_tokens_until_dot([{dot, _} | Tokens]) ->
+    Tokens;
+consume_tokens_until_dot([_ | Tokens]) ->
+    consume_tokens_until_dot(Tokens).
 
 extract_string([{string, _, S}|Tokens], Acc) ->
     extract_string(Tokens, [S|Acc]);
@@ -102,7 +113,7 @@ format_location_list(L) ->
     "#: " ++ string:join(
 	       lists:map(
 		 fun({File, Pos}) ->
-			 io_lib:format("~s.erl:~B", [File, Pos])
+			 io_lib:format("~s:~B", [File, Pos])
 		 end, L),
 	       " ") ++ io_lib:nl().
 
@@ -125,7 +136,7 @@ pot_header() ->
        "\"MIME-Version: 1.0\\n\"",
        "\"Content-Type: text/plain; charset=UTF-8\\n\"",
        "\"Content-Transfer-Encoding: 8bit\\n\"",
-       "\"X-Poedit-Basepath: ../../src\\n\"",
+       "\"X-Poedit-Basepath: ../..\\n\"",
        "\"X-Poedit-SearchPath-0: .\\n\""],
       io_lib:nl()).
 

@@ -60,7 +60,7 @@
 
 -include("logger.hrl").
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 
 -include("ejabberd_http.hrl").
 
@@ -202,7 +202,7 @@ index_page(Lang) ->
 	       ?XCT(<<"title">>,
 		    ?T("Jabber Account Registration")),
 	       ?XA(<<"link">>,
-		   [{<<"href">>, <<"/register/register.css">>},
+		   [{<<"href">>, <<"register.css">>},
 		    {<<"type">>, <<"text/css">>},
 		    {<<"rel">>, <<"stylesheet">>}])],
     Els = [?XACT(<<"h1">>,
@@ -211,11 +211,11 @@ index_page(Lang) ->
 		 ?T("Jabber Account Registration")),
 	   ?XE(<<"ul">>,
 	       [?XE(<<"li">>,
-		    [?ACT(<<"new">>, ?T("Register a Jabber account"))]),
+		    [?ACT(<<"new/">>, ?T("Register a Jabber account"))]),
 		?XE(<<"li">>,
-		    [?ACT(<<"change_password">>, ?T("Change Password"))]),
+		    [?ACT(<<"change_password/">>, ?T("Change Password"))]),
 		?XE(<<"li">>,
-		    [?ACT(<<"delete">>,
+		    [?ACT(<<"delete/">>,
 			  ?T("Unregister a Jabber account"))])])],
     {200,
      [{<<"Server">>, <<"ejabberd">>},
@@ -241,7 +241,7 @@ form_new_get2(Host, Lang, CaptchaEls) ->
 	       ?XCT(<<"title">>,
 		    ?T("Register a Jabber account")),
 	       ?XA(<<"link">>,
-		   [{<<"href">>, <<"/register/register.css">>},
+		   [{<<"href">>, <<"../register.css">>},
 		    {<<"type">>, <<"text/css">>},
 		    {<<"rel">>, <<"stylesheet">>}])],
     Els = [?XACT(<<"h1">>,
@@ -388,7 +388,7 @@ form_changepass_get(Host, Lang) ->
     HeadEls = [meta(),
 	       ?XCT(<<"title">>, ?T("Change Password")),
 	       ?XA(<<"link">>,
-		   [{<<"href">>, <<"/register/register.css">>},
+		   [{<<"href">>, <<"../register.css">>},
 		    {<<"type">>, <<"text/css">>},
 		    {<<"rel">>, <<"stylesheet">>}])],
     Els = [?XACT(<<"h1">>,
@@ -496,7 +496,7 @@ form_del_get(Host, Lang) ->
 	       ?XCT(<<"title">>,
 		    ?T("Unregister a Jabber account")),
 	       ?XA(<<"link">>,
-		   [{<<"href">>, <<"/register/register.css">>},
+		   [{<<"href">>, <<"../register.css">>},
 		    {<<"type">>, <<"text/css">>},
 		    {<<"rel">>, <<"stylesheet">>}])],
     Els = [?XACT(<<"h1">>,
@@ -625,5 +625,13 @@ mod_doc() ->
            ?T("- Register a new account on the server."), "",
            ?T("- Change the password from an existing account on the server."), "",
            ?T("- Delete an existing account on the server."), "",
+	   ?T("This module supports CAPTCHA image to register a new account. "
+	      "To enable this feature, configure the options 'captcha\_cmd' "
+	      "and 'captcha\_url', which are documented in the section with "
+	      "top-level options."), "",
+	   ?T("As an example usage, the users of the host 'example.org' can "
+	      "visit the page: 'https://example.org:5281/register/' It is "
+	      "important to include the last / character in the URL, "
+	      "otherwise the subpages URL will be incorrect."), "",
            ?T("The module depends on 'mod_register' where all the configuration "
               "is performed.")]}.

@@ -42,7 +42,7 @@
 
 -include("logger.hrl").
 -include("translate.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
 -include("mod_roster.hrl").
 
@@ -499,7 +499,8 @@ mod_doc() ->
                        "by those modules.")}},
              {name,
               #{value => ?T("Name"),
-                desc => ?T("Any arbitrary name of the contact.")}},
+                desc => ?T("The field 'var' name that will be defined. "
+                           "See XEP-0157 for some standardized names.")}},
              {urls,
               #{value => "[URI, ...]",
                 desc => ?T("A list of contact URIs, such as "

@@ -69,7 +69,7 @@
 
 -include("logger.hrl").
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 
 -include("ejabberd_http.hrl").
 
@@ -989,7 +989,7 @@ user_queue(User, Server, Query, Lang) ->
     Hdrs = get_messages_subset(User, Server, HdrsAll),
     FMsgs = format_user_queue(Hdrs),
     PageTitle = str:format(translate:translate(Lang, ?T("~ts's Offline Messages Queue")), [us_to_list(US)]),
-    (?H1GL(PageTitle, <<"mod-offline">>, <<"mod_offline">>))
+    (?H1GL(PageTitle, <<"modules/#mod-offline">>, <<"mod_offline">>))
       ++ [?XREST(?T("Submitted"))] ++
 	[?XAE(<<"form">>,
 	      [{<<"action">>, <<"">>}, {<<"method">>, <<"post">>}],
@@ -1008,7 +1008,7 @@ user_queue(User, Server, Query, Lang) ->
 			   true -> FMsgs
 			end)]),
 	       ?BR,
-	       ?INPUTT(<<"submit">>, <<"delete">>,
+	       ?INPUTTD(<<"submit">>, <<"delete">>,
 		       ?T("Delete Selected"))])].
 
 user_queue_parse_query(LUser, LServer, Query) ->
@@ -1070,14 +1070,17 @@ get_messages_subset2(Max, Length, MsgsAll) ->
 webadmin_user(Acc, User, Server, Lang) ->
     QueueLen = count_offline_messages(jid:nodeprep(User),
 				jid:nameprep(Server)),
-    FQueueLen = [?AC(<<"queue/">>,
-		     (integer_to_binary(QueueLen)))],
+    FQueueLen = ?C(integer_to_binary(QueueLen)),
+    FQueueView = ?AC(<<"queue/">>,
+		     ?T("View Queue")),
     Acc ++
-      [?XCT(<<"h3">>, ?T("Offline Messages:"))] ++
-	FQueueLen ++
-	  [?C(<<" ">>),
-	   ?INPUTT(<<"submit">>, <<"removealloffline">>,
-		   ?T("Remove All Offline Messages"))].
+        [?XCT(<<"h3">>, ?T("Offline Messages:")),
+         FQueueLen,
+         ?C(<<"  |   ">>),
+         FQueueView,
+         ?C(<<" | ">>),
+         ?INPUTTD(<<"submit">>, <<"removealloffline">>,
+                  ?T("Remove All Offline Messages"))].
 
 -spec delete_all_msgs(binary(), binary()) -> {atomic, any()}.
 delete_all_msgs(User, Server) ->
@@ -1249,7 +1252,7 @@ mod_doc() ->
               "is considered offline if no session presence priority > 0 "
               "are currently open."), "",
            ?T("NOTE: 'ejabberdctl' has a command to "
-              "delete expired messages (see chapter"
+              "delete expired messages (see chapter "
               "https://docs.ejabberd.im/admin/guide/managing"
               "[Managing an ejabberd server] in online documentation.")],
       opts =>
@@ -1281,7 +1284,7 @@ mod_doc() ->
            {use_mam_for_storage,
             #{value => "true | false",
               desc =>
-                  ?T("This is an experimetal option. Enabling this option "
+                  ?T("This is an experimental option. Enabling this option "
                      "will make 'mod_offline' not use the former spool "
                      "table for storing MucSub offline messages, but will "
                      "use the archive table instead. This use of the archive "

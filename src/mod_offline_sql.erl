@@ -32,7 +32,7 @@
 	 read_message/3, remove_message/3, read_all_messages/2,
 	 remove_all_messages/2, count_messages/2, import/1, export/1]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("mod_offline.hrl").
 -include("logger.hrl").
 -include("ejabberd_sql_pt.hrl").
@@ -267,9 +267,15 @@ get_and_del_spool_msg_t(LServer, LUser) ->
 		    ejabberd_sql:sql_query_t(
                       ?SQL("select @(username)s, @(xml)s from spool where "
                            "username=%(LUser)s and %(LServer)H order by seq;")),
-		ejabberd_sql:sql_query_t(
-                  ?SQL("delete from spool where"
-                       " username=%(LUser)s and %(LServer)H;")),
-		Result
+		DResult =
+		    ejabberd_sql:sql_query_t(
+                      ?SQL("delete from spool where"
+                           " username=%(LUser)s and %(LServer)H;")),
+		case {Result, DResult} of
+		    {{selected, Rs}, {updated, DC}} when length(Rs) /= DC ->
+			ejabberd_sql:restart(concurent_insert);
+		    _ ->
+			Result
+		end
 	end,
     ejabberd_sql:sql_transaction(LServer, F).

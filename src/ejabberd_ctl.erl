@@ -23,33 +23,14 @@
 %%%
 %%%----------------------------------------------------------------------
 
-%%% @headerfile "ejabberd_ctl.hrl"
-
-%%% @doc Management of ejabberdctl commands and frontend to ejabberd commands.
-%%%
-%%% An ejabberdctl command is an abstract function identified by a
-%%% name, with a defined number of calling arguments, that can be
-%%% defined in any Erlang module and executed using ejabberdctl
-%%% administration script.
-%%%
-%%% Note: strings cannot have blankspaces
-%%%
 %%% Does not support commands that have arguments with ctypes: list, tuple
-%%%
-%%% TODO: Update the guide
-%%% TODO: Mention this in the release notes
-%%% Note: the commands with several words use now the underline: _
-%%% It is still possible to call the commands with dash: -
-%%% but this is deprecated, and may be removed in a future version.
-
 
 -module(ejabberd_ctl).
 
 -behaviour(gen_server).
 -author('alexey@process-one.net').
 
--export([start/0, start_link/0, process/1, process2/2,
-	 register_commands/3, unregister_commands/3]).
+-export([start/0, start_link/0, process/1, process2/2]).
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
@@ -111,8 +92,6 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
-    ets:new(ejabberd_ctl_cmds, [named_table, set, public]),
-    ets:new(ejabberd_ctl_host_cmds, [named_table, set, public]),
     {ok, #state{}}.
 
 handle_call(Request, From, State) ->
@@ -134,28 +113,8 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%-----------------------------
-%% ejabberdctl Command management
-%%-----------------------------
-
-register_commands(CmdDescs, Module, Function) ->
-    ets:insert(ejabberd_ctl_cmds, CmdDescs),
-    ejabberd_hooks:add(ejabberd_ctl_process,
-		       Module, Function, 50),
-    ok.
-
-unregister_commands(CmdDescs, Module, Function) ->
-    lists:foreach(fun(CmdDesc) ->
-			  ets:delete_object(ejabberd_ctl_cmds, CmdDesc)
-		  end, CmdDescs),
-    ejabberd_hooks:delete(ejabberd_ctl_process,
-			  Module, Function, 50),
-    ok.
-
-
-%%-----------------------------
 %% Process
 %%-----------------------------
-
 
 -spec process([string()]) -> non_neg_integer().
 process(Args) ->
@@ -295,7 +254,7 @@ process2(Args, AccessCommands, Auth, Version) ->
 %% Command calling
 %%-----------------------------
 
-%% @spec (Args::[string()], Auth, AccessCommands) -> string() | integer() | {string(), integer()}
+%% @spec (Args::[string()], Auth, AccessCommands, Version) -> string() | integer() | {string(), integer()}
 try_run_ctp(Args, Auth, AccessCommands, Version) ->
     try ejabberd_hooks:run_fold(ejabberd_ctl_process, false, [Args]) of
 	false when Args /= [] ->
@@ -316,7 +275,7 @@ try_run_ctp(Args, Auth, AccessCommands, Version) ->
 	    {io_lib:format("Error in ejabberd ctl process: '~p' ~p", [Error, Why]), ?STATUS_USAGE}
     end.
 
-%% @spec (Args::[string()], Auth, AccessCommands) -> string() | integer() | {string(), integer()}
+%% @spec (Args::[string()], Auth, AccessCommands, Version) -> string() | integer() | {string(), integer()}
 try_call_command(Args, Auth, AccessCommands, Version) ->
     try call_command(Args, Auth, AccessCommands, Version) of
 	{Reason, wrong_command_arguments} ->
@@ -340,7 +299,7 @@ try_call_command(Args, Auth, AccessCommands, Version) ->
 	     ?STATUS_ERROR}
     end.
 
-%% @spec (Args::[string()], Auth, AccessCommands) -> string() | integer() | {string(), integer()} | {error, ErrorType}
+%% @spec (Args::[string()], Auth, AccessCommands, Version) -> string() | integer() | {string(), integer()} | {error, ErrorType}
 call_command([CmdString | Args], Auth, _AccessCommands, Version) ->
     CmdStringU = ejabberd_regexp:greplace(
                    list_to_binary(CmdString), <<"-">>, <<"_">>),
@@ -472,7 +431,9 @@ make_status(ok) -> ?STATUS_SUCCESS;
 make_status(true) -> ?STATUS_SUCCESS;
 make_status(Code) when is_integer(Code), Code > 255 -> ?STATUS_ERROR;
 make_status(Code) when is_integer(Code), Code > 0 -> Code;
-make_status(_Error) -> ?STATUS_ERROR.
+make_status(Error) ->
+    io:format("Error: ~p~n", [Error]),
+    ?STATUS_ERROR.
 
 get_list_commands(Version) ->
     try ejabberd_commands:list_commands(Version) of
@@ -507,13 +468,6 @@ is_supported_args(Args) ->
       end,
       Args).
 
-get_list_ctls() ->
-    case catch ets:tab2list(ejabberd_ctl_cmds) of
-	{'EXIT', _} -> [];
-	Cs -> [{NameArgs, [], Desc} || {NameArgs, Desc} <- Cs]
-    end.
-
-
 %%-----------------------------
 %% Print help
 %%-----------------------------
@@ -539,8 +493,7 @@ print_usage(HelpMode, MaxC, ShCode, Version) ->
 	 {"restart", [], "Restart ejabberd"},
 	 {"help", ["[--tags [tag] | com?*]"], "Show help (try: ejabberdctl help help)"},
 	 {"mnesia", ["[info]"], "show information of Mnesia system"}] ++
-	get_list_commands(Version) ++
-	get_list_ctls(),
+	get_list_commands(Version),
 
     print(
        ["Usage: ", ?B("ejabberdctl"), " [--no-timeout] [--node ", ?U("nodename"), "] [--version ", ?U("api_version"), "] ",
@@ -742,7 +695,7 @@ print_usage_help(MaxC, ShCode) ->
 %% Print usage command
 %%-----------------------------
 
-%% @spec (CmdSubString::string(), MaxC::integer(), ShCode::boolean()) -> ok
+%% @spec (CmdSubString::string(), MaxC::integer(), ShCode::boolean(), Version) -> ok
 print_usage_commands2(CmdSubString, MaxC, ShCode, Version) ->
     %% Get which command names match this substring
     AllCommandsNames = [atom_to_list(Name) || {Name, _, _} <- ejabberd_commands:list_commands(Version)],
@@ -785,7 +738,7 @@ filter_commands_regexp(All, Glob) ->
       end,
       All).
 
-%% @spec (Cmd::string(), MaxC::integer(), ShCode::boolean()) -> ok
+%% @spec (Cmd::string(), MaxC::integer(), ShCode::boolean(), Version) -> ok
 print_usage_command(Cmd, MaxC, ShCode, Version) ->
     Name = list_to_atom(Cmd),
     C = ejabberd_commands:get_command_definition(Name, Version),
@@ -872,12 +825,3 @@ disable_logging() ->
 disable_logging() ->
     logger:set_primary_config(level, none).
 -endif.
-
-%%-----------------------------
-%% Command management
-%%-----------------------------
-
-%%+++
-%% Struct(Integer res) create_account(Struct(String user, String server, String password))
-%%format_usage_xmlrpc(ArgsDef, ResultDef) ->
-%%    ["aaaa bbb ccc"].

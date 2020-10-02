@@ -60,6 +60,7 @@ init_config(Config) ->
 		       {loglevel, 4},
 		       {new_schema, false},
 		       {s2s_port, 5269},
+		       {stun_port, 3478},
 		       {component_port, 5270},
 		       {web_port, 5280},
 		       {proxy_port, 7777},
@@ -69,6 +70,11 @@ init_config(Config) ->
 		       {mysql_db, <<"ejabberd_test">>},
 		       {mysql_user, <<"ejabberd_test">>},
 		       {mysql_pass, <<"ejabberd_test">>},
+		       {mssql_server, <<"localhost">>},
+		       {mssql_port, 1433},
+		       {mssql_db, <<"ejabberd_test">>},
+		       {mssql_user, <<"ejabberd_test">>},
+		       {mssql_pass, <<"ejabberd_Test1">>},
 		       {pgsql_server, <<"localhost">>},
 		       {pgsql_port, 5432},
 		       {pgsql_db, <<"ejabberd_test">>},
@@ -132,25 +138,26 @@ init_config(Config) ->
 copy_backend_configs(DataDir, CWD, Backends) ->
     Files = filelib:wildcard(filename:join([DataDir, "ejabberd.*.yml"])),
     lists:foreach(
-      fun(Src) ->
-	      File = filename:basename(Src),
-	      case string:tokens(File, ".") of
-		  ["ejabberd", SBackend, "yml"] ->
-		      Backend = list_to_atom(SBackend),
-		      Macro = list_to_atom(string:to_upper(SBackend) ++ "_CONFIG"),
-		      Dst = filename:join([CWD, File]),
-		      case lists:member(Backend, Backends) of
-			  true ->
-			      {ok, _} = file:copy(Src, Dst);
-			  false ->
-			      ok = file:write_file(
-				     Dst, fast_yaml:encode(
-					    [{define_macro, [{Macro, []}]}]))
-		      end;
-		  _ ->
-		      ok
-	      end
-      end, Files).
+	fun(Src) ->
+	    io:format("copying ~p", [Src]),
+	    File = filename:basename(Src),
+	    case string:tokens(File, ".") of
+		["ejabberd", SBackend, "yml"] ->
+		    Backend = list_to_atom(SBackend),
+		    Macro = list_to_atom(string:to_upper(SBackend) ++ "_CONFIG"),
+		    Dst = filename:join([CWD, File]),
+		    case lists:member(Backend, Backends) of
+			true ->
+			    {ok, _} = file:copy(Src, Dst);
+			false ->
+			    ok = file:write_file(
+				Dst, fast_yaml:encode(
+				    [{define_macro, [{Macro, []}]}]))
+		    end;
+		_ ->
+		    ok
+	    end
+	end, Files).
 
 find_top_dir(Dir) ->
     case file:read_file_info(filename:join([Dir, ebin])) of

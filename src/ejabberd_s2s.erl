@@ -52,7 +52,7 @@
 -export([get_info_s2s_connections/1]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("ejabberd_commands.hrl").
 -include_lib("stdlib/include/ms_transform.hrl").
 -include("ejabberd_stacktrace.hrl").
@@ -319,7 +319,7 @@ host_down(Host) ->
 	      case ejabberd_router:host_of_route(From) of
 		  Host ->
 		      ejabberd_s2s_out:send(Pid, Err),
-		      ejabberd_s2s_out:stop(Pid);
+		      ejabberd_s2s_out:stop_async(Pid);
 		  _ ->
 		      ok
 	      end;
@@ -351,8 +351,11 @@ route(Packet) ->
 	{ok, Pid} when is_pid(Pid) ->
 	    ?DEBUG("Sending to process ~p~n", [Pid]),
 	    #jid{lserver = MyServer} = From,
-	    ejabberd_hooks:run(s2s_send_packet, MyServer, [Packet]),
-	    ejabberd_s2s_out:route(Pid, Packet);
+	    case ejabberd_hooks:run_fold(s2s_send_packet, MyServer, Packet,
+					 []) of
+		drop -> ok;
+		Packet1 -> ejabberd_s2s_out:route(Pid, Packet1)
+	    end;
 	{error, Reason} ->
 	    Lang = xmpp:get_lang(Packet),
 	    Err = case Reason of
@@ -473,14 +476,14 @@ new_connection(MyServer, Server, From, FromTo,
 	    if Pid1 == Pid ->
 		    ejabberd_s2s_out:connect(Pid);
 	       true ->
-		    ejabberd_s2s_out:stop(Pid)
+		    ejabberd_s2s_out:stop_async(Pid)
 	    end,
 	    [Pid1];
 	{aborted, Reason} ->
 	    ?ERROR_MSG("Failed to register s2s connection ~ts -> ~ts: "
 		       "Mnesia failure: ~p",
 		       [MyServer, Server, Reason]),
-	    ejabberd_s2s_out:stop(Pid),
+	    ejabberd_s2s_out:stop_async(Pid),
 	    []
     end.
 
@@ -553,13 +556,13 @@ stop_s2s_connections(Err) ->
     lists:foreach(
       fun({_Id, Pid, _Type, _Module}) ->
 	      ejabberd_s2s_in:send(Pid, Err),
-	      ejabberd_s2s_in:stop(Pid),
+	      ejabberd_s2s_in:stop_async(Pid),
 	      supervisor:terminate_child(ejabberd_s2s_in_sup, Pid)
       end, supervisor:which_children(ejabberd_s2s_in_sup)),
     lists:foreach(
       fun({_Id, Pid, _Type, _Module}) ->
 	      ejabberd_s2s_out:send(Pid, Err),
-	      ejabberd_s2s_out:stop(Pid),
+	      ejabberd_s2s_out:stop_async(Pid),
 	      supervisor:terminate_child(ejabberd_s2s_out_sup, Pid)
       end, supervisor:which_children(ejabberd_s2s_out_sup)),
     _ = mnesia:clear_table(s2s),

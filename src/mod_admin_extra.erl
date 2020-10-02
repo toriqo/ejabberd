@@ -85,7 +85,7 @@
 -include("mod_roster.hrl").
 -include("mod_privacy.hrl").
 -include("ejabberd_sm.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 
 %%%
 %%% gen_mod
@@ -113,26 +113,26 @@ depends(_Host, _Opts) ->
 %%%
 
 get_commands_spec() ->
-    Vcard1FieldsString = "Some vcard field names in get/set_vcard are:\n"
-	" FN		- Full Name\n"
-	" NICKNAME	- Nickname\n"
-	" BDAY		- Birthday\n"
-	" TITLE		- Work: Position\n"
-	" ROLE		- Work: Role",
+    Vcard1FieldsString = "Some vcard field names in get/set_vcard are:\n\n"
+	"* FN           - Full Name\n"
+	"* NICKNAME     - Nickname\n"
+	"* BDAY         - Birthday\n"
+	"* TITLE        - Work: Position\n"
+	"* ROLE         - Work: Role\n",
 
-    Vcard2FieldsString = "Some vcard field names and subnames in get/set_vcard2 are:\n"
-	" N FAMILY	- Family name\n"
-	" N GIVEN	- Given name\n"
-	" N MIDDLE	- Middle name\n"
-	" ADR CTRY	- Address: Country\n"
-	" ADR LOCALITY	- Address: City\n"
-	" TEL HOME      - Telephone: Home\n"
-	" TEL CELL      - Telephone: Cellphone\n"
-	" TEL WORK      - Telephone: Work\n"
-	" TEL VOICE     - Telephone: Voice\n"
-	" EMAIL USERID	- E-Mail Address\n"
-	" ORG ORGNAME	- Work: Company\n"
-	" ORG ORGUNIT	- Work: Department",
+    Vcard2FieldsString = "Some vcard field names and subnames in get/set_vcard2 are:\n\n"
+	"* N FAMILY     - Family name\n"
+	"* N GIVEN      - Given name\n"
+	"* N MIDDLE     - Middle name\n"
+	"* ADR CTRY     - Address: Country\n"
+	"* ADR LOCALITY - Address: City\n"
+	"* TEL HOME     - Telephone: Home\n"
+	"* TEL CELL     - Telephone: Cellphone\n"
+	"* TEL WORK     - Telephone: Work\n"
+	"* TEL VOICE    - Telephone: Voice\n"
+	"* EMAIL USERID - E-Mail Address\n"
+	"* ORG ORGNAME  - Work: Company\n"
+	"* ORG ORGUNIT  - Work: Department\n",
 
     VcardXEP = "For a full list of vCard fields check XEP-0054: vcard-temp at "
 	"http://www.xmpp.org/extensions/xep-0054.html",
@@ -435,7 +435,7 @@ get_commands_spec() ->
 			result = {res, rescode}},
      #ejabberd_commands{name = get_vcard, tags = [vcard],
 			desc = "Get content from a vCard field",
-			longdesc = Vcard1FieldsString ++ "\n" ++ Vcard2FieldsString ++ "\n\n" ++ VcardXEP,
+			longdesc = Vcard1FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = get_vcard,
 			args = [{user, binary}, {host, binary}, {name, binary}],
 			args_example = [<<"user1">>,<<"myserver.com">>,<<"NICKNAME">>],
@@ -445,7 +445,7 @@ get_commands_spec() ->
 			result = {content, string}},
      #ejabberd_commands{name = get_vcard2, tags = [vcard],
 			desc = "Get content from a vCard subfield",
-			longdesc = Vcard2FieldsString ++ "\n\n" ++ Vcard1FieldsString ++ "\n" ++ VcardXEP,
+			longdesc = Vcard2FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = get_vcard,
 			args = [{user, binary}, {host, binary}, {name, binary}, {subname, binary}],
 			args_example = [<<"user1">>,<<"myserver.com">>,<<"N">>, <<"FAMILY">>],
@@ -455,14 +455,14 @@ get_commands_spec() ->
 			result = {content, string}},
      #ejabberd_commands{name = get_vcard2_multi, tags = [vcard],
 			desc = "Get multiple contents from a vCard field",
-			longdesc = Vcard2FieldsString ++ "\n\n" ++ Vcard1FieldsString ++ "\n" ++ VcardXEP,
+			longdesc = Vcard2FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = get_vcard_multi,
 			args = [{user, binary}, {host, binary}, {name, binary}, {subname, binary}],
 			result = {contents, {list, {value, string}}}},
 
      #ejabberd_commands{name = set_vcard, tags = [vcard],
 			desc = "Set content in a vCard field",
-			longdesc = Vcard1FieldsString ++ "\n" ++ Vcard2FieldsString ++ "\n\n" ++ VcardXEP,
+			longdesc = Vcard1FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = set_vcard,
 			args = [{user, binary}, {host, binary}, {name, binary}, {content, binary}],
 			args_example = [<<"user1">>,<<"myserver.com">>, <<"URL">>, <<"www.example.com">>],
@@ -470,7 +470,7 @@ get_commands_spec() ->
 			result = {res, rescode}},
      #ejabberd_commands{name = set_vcard2, tags = [vcard],
 			desc = "Set content in a vCard subfield",
-			longdesc = Vcard2FieldsString ++ "\n\n" ++ Vcard1FieldsString ++ "\n" ++ VcardXEP,
+			longdesc = Vcard2FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = set_vcard,
 			args = [{user, binary}, {host, binary}, {name, binary}, {subname, binary}, {content, binary}],
 			args_example = [<<"user1">>,<<"myserver.com">>,<<"TEL">>, <<"NUMBER">>, <<"123456">>],
@@ -478,7 +478,7 @@ get_commands_spec() ->
 			result = {res, rescode}},
      #ejabberd_commands{name = set_vcard2_multi, tags = [vcard],
 			desc = "Set multiple contents in a vCard subfield",
-			longdesc = Vcard2FieldsString ++ "\n\n" ++ Vcard1FieldsString ++ "\n" ++ VcardXEP,
+			longdesc = Vcard2FieldsString ++ "\n" ++ VcardXEP,
 			module = ?MODULE, function = set_vcard,
 			args = [{user, binary}, {host, binary}, {name, binary}, {subname, binary}, {contents, {list, {value, binary}}}],
 			result = {res, rescode}},
@@ -1513,6 +1513,9 @@ send_stanza(FromString, ToString, Stanza) ->
     catch _:{xmpp_codec, Why} ->
 	    io:format("incorrect stanza: ~ts~n", [xmpp:format_error(Why)]),
 	    {error, Why};
+	  _:{badmatch, {error, {Code, Why}}} when is_integer(Code) ->
+	    io:format("invalid xml: ~p~n", [Why]),
+	    {error, Why};
 	  _:{badmatch, {error, Why}} ->
 	    io:format("invalid xml: ~p~n", [Why]),
 	    {error, Why};
@@ -1596,41 +1599,33 @@ mod_doc() ->
           [?T("This module provides additional administrative commands."), "",
            ?T("Details for some commands:"), "",
            ?T("- 'ban-acount':"),
-           ?T("This command kicks all the connected sessions of the
-           account from the server. It also changes their password to
-           a randomly generated one, so they can't login anymore
-           unless a server administrator changes their password
-           again. It is possible to define the reason of the ban. The
-           new password also includes the reason and the date and time
-           of the ban. For example, if this command is called:
-           'ejabberdctl vhost example.org ban-account boby \"Spammed
-           rooms\"', then the sessions of the local account which JID
-           is boby@example.org will be kicked, and its password will
-           be set to something like this:
-           'BANNED_ACCOUNT--20080425T21:45:07--2176635--Spammed_rooms'"),
-           ?T("- 'pushroster' (and 'pushroster-all'):"),
-           ?T("The roster file must be placed, if using Windows, on
-           the directory where you installed ejabberd: C:/Program
-           Files/ejabberd or similar. If you use other Operating
-           System, place the file on the same directory where the
-           .beam files are installed. See below an example roster
-           file."),
+           ?T("This command kicks all the connected sessions of the account "
+	      "from the server. It also changes their password to a randomly "
+	      "generated one, so they can't login anymore unless a server "
+	      "administrator changes their password again. It is possible to "
+	      "define the reason of the ban. The new password also includes "
+	      "the reason and the date and time of the ban. See an example below."),
+           ?T("- 'pushroster': (and 'pushroster-all')"),
+           ?T("The roster file must be placed, if using Windows, on the "
+	      "directory where you installed ejabberd: "
+	      "C:/Program Files/ejabberd or similar. If you use other "
+	      "Operating System, place the file on the same directory where "
+	      "the .beam files are installed. See below an example roster file."),
            ?T("- 'srg-create':"),
-           ?T("If you want to put a group Name with blankspaces, use
-           the characters \"\' and \\'\" to define when the Name
-           starts and ends. For example: 'ejabberdctl srg-create g1
-           example.org \"\'Group number 1\\'\" this_is_g1 g1'")],
+           ?T("If you want to put a group Name with blankspaces, use the "
+	      "characters \"\' and \'\" to define when the Name starts and "
+	      "ends. See an example below.")],
       opts =>
           [{module_resource,
             #{value => ?T("Resource"),
               desc =>
-                  ?T("Indicate the resource that the XMPP stanzas must
-                  use in the FROM or TO JIDs. This is only useful in
-                  the 'get_vcard*' and 'set_vcard*' commands. The
-                  default value is 'mod_admin_extra'.")}}],
+                  ?T("Indicate the resource that the XMPP stanzas must use "
+		     "in the FROM or TO JIDs. This is only useful in the "
+		     "'get_vcard*' and 'set_vcard*' commands. The default "
+		     "value is 'mod_admin_extra'.")}}],
       example =>
-	  [{?T("With this configuration, vCards can only be modified
-	    with mod_admin_extra commands:"),
+	  [{?T("With this configuration, vCards can only be modified with "
+	       "mod_admin_extra commands:"),
 	    ["acl:",
 	     "  adminextraresource:",
 	     "    - resource: \"modadminextraf8x,31ad\"",
@@ -1645,4 +1640,11 @@ mod_doc() ->
 	   {?T("Content of roster file for 'pushroster' command:"),
 	    ["[{<<\"bob\">>, <<\"example.org\">>, <<\"workers\">>, <<\"Bob\">>},",
 	     "{<<\"mart\">>, <<\"example.org\">>, <<\"workers\">>, <<\"Mart\">>},",
-	     "{<<\"Rich\">>, <<\"example.org\">>, <<\"bosses\">>, <<\"Rich\">>}]."]}]}.
+	     "{<<\"Rich\">>, <<\"example.org\">>, <<\"bosses\">>, <<\"Rich\">>}]."]},
+	   {?T("With this call, the sessions of the local account which JID is "
+	      "boby@example.org will be kicked, and its password will be set "
+	      "to something like "
+	      "'BANNED_ACCOUNT--20080425T21:45:07--2176635--Spammed_rooms'"),
+	    ["ejabberdctl vhost example.org ban-account boby \"Spammed rooms\""]},
+	   {?T("Call to srg-create using double-quotes and single-quotes:"),
+	    ["ejabberdctl srg-create g1 example.org \"\'Group number 1\'\" this_is_g1 g1"]}]}.

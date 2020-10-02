@@ -41,7 +41,7 @@
 	 process_mam_query/1,
 	 process_pubsub_query/1]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 -include("translate.hrl").
 -include("ejabberd_stacktrace.hrl").
@@ -107,6 +107,10 @@ mod_doc() ->
               "yet ready to use in production. It's asserted that "
               "the MIX protocol is going to replace the MUC protocol "
               "in the future (see 'mod_muc')."), "",
+           ?T("To learn more about how to use that feature, you can refer to "
+	      "our tutorial: https://docs.ejabberd.im/tutorials/mix-010/"
+	      "[Getting started with XEP-0369: Mediated Information "
+	      "eXchange (MIX) v0.1]."), "",
            ?T("The module depends on 'mod_mam'.")],
       opts =>
           [{access_create,
@@ -638,7 +642,7 @@ notify_participant_left(Mod, LServer, To, ID) ->
 -spec make_id(jid(), binary()) -> binary().
 make_id(JID, Key) ->
     Data = jid:encode(jid:tolower(jid:remove_resource(JID))),
-    xmpp_util:hex(crypto:hmac(sha256, Data, Key, 10)).
+    xmpp_util:hex(misc:crypto_hmac(sha256, Data, Key, 10)).
 
 %%%===================================================================
 %%% Error generators

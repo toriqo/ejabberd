@@ -37,11 +37,12 @@
 	 now_to_usec/1, usec_to_now/1, encode_pid/1, decode_pid/2,
 	 compile_exprs/2, join_atoms/2, try_read_file/1, get_descr/2,
 	 css_dir/0, img_dir/0, js_dir/0, msgs_dir/0, sql_dir/0, lua_dir/0,
-	 read_css/1, read_img/1, read_js/1, read_lua/1, try_url/1,
+	 read_css/1, read_img/1, read_js/1, read_lua/1,
 	 intersection/2, format_val/1, cancel_timer/1, unique_timestamp/0,
 	 is_mucsub_message/1, best_match/2, pmap/2, peach/2, format_exception/4,
-	 parse_ip_mask/1, match_ip_mask/3, format_hosts_list/1, format_cycle/1,
-	 delete_dir/1]).
+	 get_my_ipv4_address/0, get_my_ipv6_address/0, parse_ip_mask/1,
+	 crypto_hmac/3, crypto_hmac/4, uri_parse/1,
+	 match_ip_mask/3, format_hosts_list/1, format_cycle/1, delete_dir/1]).
 
 %% Deprecated functions
 -export([decode_base64/1, encode_base64/1]).
@@ -49,10 +50,38 @@
 	     {encode_base64, 1}]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include_lib("kernel/include/file.hrl").
 
 -type distance_cache() :: #{{string(), string()} => non_neg_integer()}.
+
+-ifdef(USE_OLD_HTTP_URI).
+uri_parse(URL) when is_binary(URL) ->
+    uri_parse(binary_to_list(URL));
+uri_parse(URL) ->
+    {ok, {Scheme, _UserInfo, Host, Port, Path, _Query}} = http_uri:parse(URL),
+    {ok, Scheme, Host, Port, Path}.
+-else.
+uri_parse(URL) when is_binary(URL) ->
+    uri_parse(binary_to_list(URL));
+uri_parse(URL) ->
+    case uri_string:parse(URL) of
+	#{scheme := Scheme, host := Host, port := Port, path := Path} ->
+	    {ok, Scheme, Host, Port, Path};
+	#{scheme := "https", host := Host, path := Path} ->
+	    {ok, "https", Host, 443, Path};
+	#{scheme := "http", host := Host, path := Path} ->
+	    {ok, "http", Host, 80, Path}
+    end.
+-endif.
+
+-ifdef(USE_OLD_CRYPTO_HMAC).
+crypto_hmac(Type, Key, Data) -> crypto:hmac(Type, Key, Data).
+crypto_hmac(Type, Key, Data, MacL) -> crypto:hmac(Type, Key, Data, MacL).
+-else.
+crypto_hmac(Type, Key, Data) -> crypto:mac(hmac, Type, Key, Data).
+crypto_hmac(Type, Key, Data, MacL) -> crypto:macN(hmac, Type, Key, Data, MacL).
+-endif.
 
 %%%===================================================================
 %%% API
@@ -306,7 +335,7 @@ join_atoms(Atoms, Sep) ->
     str:join([io_lib:format("~p", [A]) || A <- lists:sort(Atoms)], Sep).
 
 %% @doc Checks if the file is readable and converts its name to binary.
-%%      Fails with `badarg` otherwise. The function is intended for usage
+%%      Fails with `badarg' otherwise. The function is intended for usage
 %%      in configuration validators only.
 -spec try_read_file(file:filename_all()) -> binary().
 try_read_file(Path) ->
@@ -316,29 +345,6 @@ try_read_file(Path) ->
 	    iolist_to_binary(Path);
 	{error, Why} ->
 	    ?ERROR_MSG("Failed to read ~ts: ~ts", [Path, file:format_error(Why)]),
-	    erlang:error(badarg)
-    end.
-
-%% @doc Checks if the URL is valid HTTP(S) URL and converts its name to binary.
-%%      Fails with `badarg` otherwise. The function is intended for usage
-%%      in configuration validators only.
--spec try_url(binary() | string()) -> binary().
-try_url(URL0) ->
-    URL = case URL0 of
-	V when is_binary(V) -> binary_to_list(V);
-	_ -> URL0
-    end,
-    case http_uri:parse(URL) of
-	{ok, {Scheme, _, _, _, _, _}} when Scheme /= http, Scheme /= https ->
-	    ?ERROR_MSG("Unsupported URI scheme: ~ts", [URL]),
-	    erlang:error(badarg);
-	{ok, {_, _, Host, _, _, _}} when Host == ""; Host == <<"">> ->
-	    ?ERROR_MSG("Invalid URL: ~ts", [URL]),
-	    erlang:error(badarg);
-	{ok, _} ->
-	    iolist_to_binary(URL);
-	{error, _} ->
-	    ?ERROR_MSG("Invalid URL: ~ts", [URL]),
 	    erlang:error(badarg)
     end.
 
@@ -508,6 +514,22 @@ format_exception(Level, Class, Reason, Stacktrace) ->
 	      io_lib:print(Term, I, 80, -1)
       end).
 -endif.
+
+-spec get_my_ipv4_address() -> inet:ip4_address().
+get_my_ipv4_address() ->
+    {ok, MyHostName} = inet:gethostname(),
+    case inet:getaddr(MyHostName, inet) of
+	{ok, Addr} -> Addr;
+	{error, _} -> {127, 0, 0, 1}
+    end.
+
+-spec get_my_ipv6_address() -> inet:ip6_address().
+get_my_ipv6_address() ->
+    {ok, MyHostName} = inet:gethostname(),
+    case inet:getaddr(MyHostName, inet6) of
+	{ok, Addr} -> Addr;
+	{error, _} -> {0, 0, 0, 0, 0, 0, 0, 1}
+    end.
 
 -spec parse_ip_mask(binary()) -> {ok, {inet:ip4_address(), 0..32}} |
 				 {ok, {inet:ip6_address(), 0..128}} |

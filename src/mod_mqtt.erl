@@ -256,7 +256,7 @@ listen_opt_type(max_payload_size) ->
     econf:pos_int(infinity).
 
 listen_options() ->
-    [{max_fsm_queue, 5000},
+    [{max_fsm_queue, 10000},
      {max_payload_size, infinity},
      {tls, false},
      {tls_verify, false}].
@@ -267,7 +267,8 @@ listen_options() ->
 mod_doc() ->
     #{desc =>
           ?T("This module adds support for the MQTT protocol "
-             "version '3.1.1' and '5.0'."),
+             "version '3.1.1' and '5.0'. Remember to configure "
+	     "'mod_mqtt' in 'modules' and  'listen' sections."),
       opts =>
           [{access_subscribe,
             #{value => "{TopicFilter: AccessName}",

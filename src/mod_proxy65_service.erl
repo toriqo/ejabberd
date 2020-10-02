@@ -38,7 +38,7 @@
 	 delete_listener/1, route/1]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("translate.hrl").
 -include("ejabberd_stacktrace.hrl").
 
@@ -266,18 +266,10 @@ get_streamhost(Host, ServerHost) ->
 get_endpoint(Host) ->
     Port = mod_proxy65_opt:port(Host),
     IP = case mod_proxy65_opt:ip(Host) of
-	     undefined -> get_my_ip();
+	     undefined -> misc:get_my_ipv4_address();
 	     Addr -> Addr
 	 end,
     {Port, IP, tcp}.
-
--spec get_my_ip() -> inet:ip_address().
-get_my_ip() ->
-    {ok, MyHostName} = inet:gethostname(),
-    case inet:getaddr(MyHostName, inet) of
-      {ok, Addr} -> Addr;
-      {error, _} -> {127, 0, 0, 1}
-    end.
 
 max_connections(ServerHost) ->
     mod_proxy65_opt:max_connections(ServerHost).

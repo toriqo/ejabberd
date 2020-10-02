@@ -45,7 +45,7 @@
 
 -include("logger.hrl").
 -include("translate.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 
 -record(multicastc, {rserver :: binary(),
 		     response,
@@ -1188,19 +1188,19 @@ mod_doc() ->
 	      desc =>
 		  [?T("Specify a list of custom limits which override the "
 		      "default ones defined in XEP-0033. Limits are defined "
-		      "per sender type and stanza type, where:"),
-		   ?T("- The sender type can be: 'local' or 'remote'."), "",
-		   ?T("- The stanza type can be: 'message' or 'presence'."), "",
-		   ?T("- The number can be a positive integer or the key word 'infinite'.")],
+		      "per sender type and stanza type, where:"), "",
+		   ?T("- 'sender' can be: 'local' or 'remote'."),
+		   ?T("- 'stanza' can be: 'message' or 'presence'."),
+		   ?T("- 'number' can be a positive integer or 'infinite'.")],
               example =>
-                  [{?T("Default values:"),
-                    ["local:",
+                    ["# Default values:",
+                     "local:",
 		     "  message: 100",
 		     "  presence: 100",
 		     "remote:",
 		     "  message: 20",
-		     "  presence: 20"]}
-		  ]}},
+		     "  presence: 20"]
+		  }},
            {name,
             #{desc => ?T("Service name to provide in the Info query to the "
 			 "Service Discovery. Default is '\"Multicast\"'.")}},

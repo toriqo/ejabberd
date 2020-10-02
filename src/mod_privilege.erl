@@ -41,7 +41,7 @@
 	 process_presence_out/1, process_presence_in/1]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("translate.hrl").
 
 -type roster_permission() :: both | get | set.
@@ -100,6 +100,12 @@ mod_doc() ->
               "It is worth noting that the permissions grant access to "
               "the component to a specific data type for all users of "
               "the virtual host on which 'mod_privilege' is loaded."), "",
+	   ?T("Make sure you have a listener configured to connect your "
+	      "component. Check the section about listening ports for more "
+	      "information."), "",
+	   ?T("WARNING: Security issue: Privileged access gives components "
+	      "access to sensitive data, so permission should be granted "
+	      "carefully, only if you trust a component."), "",
            ?T("NOTE: This module is complementary to 'mod_delegation', "
               "but can also be used separately.")],
       opts =>

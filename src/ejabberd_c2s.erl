@@ -43,11 +43,11 @@
 	 process_closed/2, process_terminated/2, process_info/2]).
 %% API
 -export([get_presence/1, set_presence/2, resend_presence/1, resend_presence/2,
-	 open_session/1, call/3, cast/2, send/2, close/1, close/2, stop/1,
+	 open_session/1, call/3, cast/2, send/2, close/1, close/2, stop_async/1,
 	 reply/2, copy_state/2, set_timeout/2, route/2, format_reason/2,
 	 host_up/1, host_down/1, send_ws_ping/1, bounce_message_queue/2]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 -include("mod_roster.hrl").
 -include("translate.hrl").
@@ -110,10 +110,9 @@ close(Ref) ->
 close(Ref, Reason) ->
     xmpp_stream_in:close(Ref, Reason).
 
--spec stop(pid()) -> ok;
-	  (state()) -> no_return().
-stop(Ref) ->
-    xmpp_stream_in:stop(Ref).
+-spec stop_async(pid()) -> ok.
+stop_async(Pid) ->
+    xmpp_stream_in:stop_async(Pid).
 
 -spec send(pid(), xmpp_element()) -> ok;
 	  (state(), xmpp_element()) -> state().
@@ -181,10 +180,9 @@ host_down(Host) ->
 %% Copies content of one c2s state to another.
 %% This is needed for session migration from one pid to another.
 -spec copy_state(state(), state()) -> state().
-copy_state(#{owner := Owner} = NewState,
-	   #{jid := JID, resource := Resource, sid := {Time, _},
-	     auth_module := AuthModule, lserver := LServer,
-	     pres_a := PresA} = OldState) ->
+copy_state(NewState,
+	   #{jid := JID, resource := Resource, auth_module := AuthModule,
+	     lserver := LServer, pres_a := PresA} = OldState) ->
     State1 = case OldState of
 		 #{pres_last := Pres, pres_timestamp := PresTS} ->
 		     NewState#{pres_last => Pres, pres_timestamp => PresTS};
@@ -194,7 +192,6 @@ copy_state(#{owner := Owner} = NewState,
     Conn = get_conn_type(State1),
     State2 = State1#{jid => JID, resource => Resource,
 		     conn => Conn,
-		     sid => {Time, Owner},
 		     auth_module => AuthModule,
 		     pres_a => PresA},
     ejabberd_hooks:run_fold(c2s_copy_session, LServer, State2, [OldState]).
@@ -285,7 +282,8 @@ process_auth_result(#{sasl_mech := Mech,
     State.
 
 process_closed(State, Reason) ->
-    stop(State#{stop_reason => Reason}).
+    stop_async(self()),
+    State#{stop_reason => Reason}.
 
 process_terminated(#{sid := SID, socket := Socket,
 		     jid := JID, user := U, server := S, resource := R} = State,
@@ -293,17 +291,17 @@ process_terminated(#{sid := SID, socket := Socket,
     Status = format_reason(State, Reason),
     ?INFO_MSG("(~ts) Closing c2s session for ~ts: ~ts",
 	      [xmpp_socket:pp(Socket), jid:encode(JID), Status]),
+    Pres = #presence{type = unavailable,
+		     from = JID,
+		     to = jid:remove_resource(JID)},
     State1 = case maps:is_key(pres_last, State) of
 		 true ->
-		     Pres = #presence{type = unavailable,
-				      from = JID,
-				      to = jid:remove_resource(JID)},
 		     ejabberd_sm:close_session_unset_presence(SID, U, S, R,
 							      Status),
-		     broadcast_presence_unavailable(State, Pres);
+		     broadcast_presence_unavailable(State, Pres, true);
 		 false ->
 		     ejabberd_sm:close_session(SID, U, S, R),
-		     State
+		     broadcast_presence_unavailable(State, Pres, false)
 	     end,
     bounce_message_queue(SID, JID),
     State1;
@@ -386,7 +384,7 @@ sasl_mechanisms(Mechs, #{lserver := LServer} = State) ->
 	 (<<"DIGEST-MD5">>) -> Type == plain;
 	 (<<"SCRAM-SHA-1">>) -> Type /= external;
 	 (<<"PLAIN">>) -> true;
-	 (<<"X-OAUTH2">>) -> true;
+	 (<<"X-OAUTH2">>) -> [ejabberd_auth_anonymous] /= ejabberd_auth:auth_modules(LServer);
 	 (<<"EXTERNAL">>) -> maps:get(tls_verify, State, false);
 	 (_) -> false
       end, Mechs -- Mechs1).
@@ -491,7 +489,11 @@ handle_authenticated_packet(Pkt, #{lserver := LServer, jid := JID,
 	#iq{type = set, sub_els = [_]} ->
 	    try xmpp:try_subtag(Pkt2, #xmpp_session{}) of
 		#xmpp_session{} ->
-		    send(State2, xmpp:make_iq_result(Pkt2));
+		    % It seems that some client are expecting to have response
+		    % to session request be sent from server jid, let's make
+		    % sure it is that.
+		    Pkt3 = xmpp:set_to(Pkt2, jid:make(<<>>, LServer, <<>>)),
+		    send(State2, xmpp:make_iq_result(Pkt3));
 		_ ->
 		    check_privacy_then_route(State2, Pkt2)
 	    catch _:{xmpp_codec, Why} ->
@@ -730,7 +732,7 @@ process_self_presence(#{lserver := LServer, sid := SID,
     _ = ejabberd_sm:unset_presence(SID, U, S, R, Status),
     {Pres1, State1} = ejabberd_hooks:run_fold(
 			c2s_self_presence, LServer, {Pres, State}, []),
-    State2 = broadcast_presence_unavailable(State1, Pres1),
+    State2 = broadcast_presence_unavailable(State1, Pres1, true),
     maps:remove(pres_last, maps:remove(pres_timestamp, State2));
 process_self_presence(#{lserver := LServer} = State,
 		      #presence{type = available} = Pres) ->
@@ -751,28 +753,39 @@ update_priority(#{sid := SID, user := U, server := S, resource := R},
     Priority = get_priority_from_presence(Pres),
     ejabberd_sm:set_presence(SID, U, S, R, Priority, Pres).
 
--spec broadcast_presence_unavailable(state(), presence()) -> state().
-broadcast_presence_unavailable(#{jid := JID, pres_a := PresA} = State, Pres) ->
+-spec broadcast_presence_unavailable(state(), presence(), boolean()) -> state().
+broadcast_presence_unavailable(#{jid := JID, pres_a := PresA} = State, Pres,
+			       BroadcastToRoster) ->
     #jid{luser = LUser, lserver = LServer} = JID,
-    BareJID = jid:remove_resource(JID),
-    Items1 = ejabberd_hooks:run_fold(roster_get, LServer,
-				     [], [{LUser, LServer}]),
+    BareJID = jid:tolower(jid:remove_resource(JID)),
+    Items1 = case BroadcastToRoster of
+		true ->
+		    Roster = ejabberd_hooks:run_fold(roster_get, LServer,
+						     [], [{LUser, LServer}]),
+		    lists:foldl(
+			fun(#roster{jid = LJID, subscription = Sub}, Acc)
+			       when Sub == both; Sub == from ->
+			    maps:put(LJID, 1, Acc);
+			   (_, Acc) ->
+			       Acc
+			end, #{BareJID => 1}, Roster);
+		_ ->
+		    #{BareJID => 1}
+	    end,
     Items2 = ?SETS:fold(
-		fun(LJID, Items) ->
-			[#roster{jid = LJID, subscription = from}|Items]
-		end, Items1, PresA),
-    JIDs = lists:foldl(
-	     fun(#roster{jid = LJID, subscription = Sub}, Tos)
-		   when Sub == both orelse Sub == from ->
-		     To = jid:make(LJID),
-		     P = xmpp:set_to(Pres, jid:make(LJID)),
-		     case privacy_check_packet(State, P, out) of
-			 allow -> [To|Tos];
-			 deny -> Tos
-		     end;
-		(_, Tos) ->
-		     Tos
-	     end, [BareJID], Items2),
+	fun(LJID, Acc) ->
+	    maps:put(LJID, 1, Acc)
+	end, Items1, PresA),
+
+    JIDs = lists:filtermap(
+	fun(LJid) ->
+	    To = jid:make(LJid),
+	    P = xmpp:set_to(Pres, To),
+	    case privacy_check_packet(State, P, out) of
+		allow -> {true, To};
+		deny -> false
+	    end
+	end, maps:keys(Items2)),
     route_multiple(State, JIDs, Pres),
     State#{pres_a => ?SETS:new()}.
 
@@ -902,7 +915,7 @@ bounce_message_queue({_, Pid} = SID, JID) ->
 	    receive {route, Pkt} ->
 		    ejabberd_router:route(Pkt),
 		    bounce_message_queue(SID, JID)
-	    after 0 ->
+	    after 100 ->
 		    ok
 	    end
     end.
@@ -937,7 +950,11 @@ fix_from_to(Pkt, #{jid := JID}) when ?is_stanza(Pkt) ->
 			{U, S, _} -> jid:replace_resource(JID, From#jid.resource);
 			_ -> From
 		    end,
-	    xmpp:set_from_to(Pkt, From1, JID)
+	    To1 = case xmpp:get_to(Pkt) of
+			#jid{lresource = <<>>} = To2 -> To2;
+			_ -> JID
+		    end,
+	    xmpp:set_from_to(Pkt, From1, To1)
     end;
 fix_from_to(Pkt, _State) ->
     Pkt.
@@ -991,4 +1008,4 @@ listen_options() ->
      {tls_verify, false},
      {zlib, false},
      {max_stanza_size, infinity},
-     {max_fsm_queue, 5000}].
+     {max_fsm_queue, 10000}].

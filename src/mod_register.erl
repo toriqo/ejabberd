@@ -38,7 +38,7 @@
 	 format_error/1, mod_doc/0]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("translate.hrl").
 
 start(Host, _Opts) ->
@@ -114,13 +114,12 @@ process_iq(#iq{from = From, to = To} = IQ, Source) ->
 	end,
     Server = To#jid.lserver,
     Access = mod_register_opt:access_remove(Server),
-    Remove = case acl:match_rule(Server, Access, From) of
-                 deny -> deny;
-                 allow when From#jid.lserver /= Server ->
-                     deny;
-                 allow ->
-                     check_access(From#jid.luser, Server, Source)
-             end,
+    Remove = case {acl:match_rule(Server, Access, From), From#jid.lserver} of
+		 {allow, Server} ->
+		     allow;
+		 {_, _} ->
+		     deny
+	     end,
     process_iq(IQ, Source, IsCaptchaEnabled, Remove == allow).
 
 process_iq(#iq{type = set, lang = Lang,
@@ -628,15 +627,18 @@ mod_doc() ->
               "This protocol enables end users to use a XMPP client to:"), "",
            ?T("* Register a new account on the server."), "",
            ?T("* Change the password from an existing account on the server."), "",
-           ?T("* Delete an existing account on the server.")],
+           ?T("* Delete an existing account on the server."), "",
+           ?T("This module reads also another option defined globally for the "
+	      "server: 'registration_timeout'. Please check that option "
+	      "documentation in the section with top-level options.")],
       opts =>
           [{access,
             #{value => ?T("AccessName"),
               desc =>
-                  ?T("Specify rules to restrict what usernames can be registered and "
-                     "unregistered. If a rule returns 'deny' on the requested username, "
-                     "registration and unregistration of that user name is denied. "
-                     "There are no restrictions by default.")}},
+                  ?T("Specify rules to restrict what usernames can be registered. "
+                     "If a rule returns 'deny' on the requested username, "
+                     "registration of that user name is denied. There are no "
+                     "restrictions by default.")}},
            {access_from,
             #{value => ?T("AccessName"),
               desc =>

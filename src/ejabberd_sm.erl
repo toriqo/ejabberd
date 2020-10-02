@@ -85,7 +85,7 @@
 	 handle_info/2, terminate/2, code_change/3]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("ejabberd_commands.hrl").
 -include("ejabberd_sm.hrl").
 -include("ejabberd_stacktrace.hrl").
@@ -538,7 +538,7 @@ host_down(Host) ->
     lists:foreach(
       fun(#session{sid = {_, Pid}}) when node(Pid) == node() ->
 	      ejabberd_c2s:send(Pid, Err),
-	      ejabberd_c2s:stop(Pid);
+	      ejabberd_c2s:stop_async(Pid);
 	 (_) ->
 	      ok
       end, get_sessions(Mod, Host)),

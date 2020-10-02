@@ -33,7 +33,7 @@
 	 s2s_in_features/2, s2s_out_init/2, s2s_out_closed/2,
 	 s2s_out_tls_verify/2]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 -include("translate.hrl").
 
@@ -265,7 +265,8 @@ s2s_out_packet(#{server := LServer,
     ejabberd_s2s_in:update_state(
       Pid, fun(S) -> send_db_result(S, Response) end),
     %% At this point the connection is no longer needed and we can terminate it
-    ejabberd_s2s_out:stop(State);
+    ejabberd_s2s_out:stop_async(self()),
+    State;
 s2s_out_packet(#{server := LServer, remote_server := RServer} = State,
 	       #db_result{to = LServer, from = RServer,
 			  type = Type} = Result) when Type /= undefined ->
@@ -304,7 +305,7 @@ s2s_out_tls_verify(_, #{server_host := ServerHost, remote_server := RServer}) ->
 make_key(From, To, StreamID) ->
     Secret = ejabberd_config:get_shared_key(),
     str:to_hexlist(
-      crypto:hmac(sha256, str:to_hexlist(crypto:hash(sha256, Secret)),
+      misc:crypto_hmac(sha256, str:to_hexlist(crypto:hash(sha256, Secret)),
 		  [To, " ", From, " ", StreamID])).
 
 -spec send_verify_request(ejabberd_s2s_out:state()) -> ejabberd_s2s_out:state().

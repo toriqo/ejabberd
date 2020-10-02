@@ -33,9 +33,9 @@
 -export([handle_stream_start/2, handle_auth_success/4, handle_auth_failure/4,
 	 handle_authenticated_packet/2, get_password_fun/1, tls_options/1]).
 %% API
--export([send/2, close/1, close/2, stop/1]).
+-export([send/2, close/1, close/2, stop_async/1]).
 
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("logger.hrl").
 -include("translate.hrl").
 
@@ -59,7 +59,7 @@ stop() ->
     lists:foreach(
       fun({_Id, Pid, _Type, _Module}) ->
               send(Pid, Err),
-              stop(Pid),
+              stop_async(Pid),
               supervisor:terminate_child(ejabberd_service_sup, Pid)
       end, supervisor:which_children(ejabberd_service_sup)),
     _ = supervisor:terminate_child(ejabberd_sup, ejabberd_service_sup),
@@ -83,10 +83,9 @@ close(Ref) ->
 close(Ref, Reason) ->
     xmpp_stream_in:close(Ref, Reason).
 
--spec stop(pid()) -> ok;
-          (state()) -> no_return().
-stop(Ref) ->
-    xmpp_stream_in:stop(Ref).
+-spec stop_async(pid()) -> ok.
+stop_async(Pid) ->
+    xmpp_stream_in:stop_async(Pid).
 
 %%%===================================================================
 %%% xmpp_stream_in callbacks
@@ -303,7 +302,7 @@ listen_options() ->
      {tls, false},
      {tls_compression, false},
      {max_stanza_size, infinity},
-     {max_fsm_queue, 5000},
+     {max_fsm_queue, 10000},
      {password, undefined},
      {hosts, []},
      {check_from, true},

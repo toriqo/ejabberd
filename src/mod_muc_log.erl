@@ -42,7 +42,7 @@
 	 mod_opt_type/1, mod_options/1, depends/2, mod_doc/0]).
 
 -include("logger.hrl").
--include("xmpp.hrl").
+-include_lib("xmpp/include/xmpp.hrl").
 -include("mod_muc_room.hrl").
 -include("translate.hrl").
 
@@ -92,7 +92,7 @@ check_access_log(Host, From) ->
 
 -spec get_url(#state{}) -> {ok, binary()} | error.
 get_url(#state{room = Room, host = Host, server_host = ServerHost}) ->
-    case mod_muc_log_opt:url(ServerHost) of
+    try mod_muc_log_opt:url(ServerHost) of
 	undefined -> error;
 	URL ->
 	    case mod_muc_log_opt:dirname(ServerHost) of
@@ -101,6 +101,9 @@ get_url(#state{room = Room, host = Host, server_host = ServerHost}) ->
 		room_name ->
 		    {ok, <<URL/binary, $/, Room/binary>>}
 	    end
+    catch
+	error:{module_not_loaded, _, _} ->
+	    error
     end.
 
 depends(_Host, _Opts) ->
@@ -485,7 +488,7 @@ get_dateweek(Date, Lang) ->
 	      11 -> tr(Lang, ?T("November"));
 	      12 -> tr(Lang, ?T("December"))
 	    end,
-    list_to_binary(
+    unicode:characters_to_binary(
       case Lang of
           <<"en">> ->
               io_lib:format("~ts, ~ts ~w, ~w", [Weekday, Month, D, Y]);

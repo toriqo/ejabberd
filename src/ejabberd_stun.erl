@@ -46,19 +46,26 @@ start_link(_, _, _) ->
     fail().
 -else.
 -export([tcp_init/2, udp_init/2, udp_recv/5, start/3,
-	 start_link/3, accept/1, listen_opt_type/1, listen_options/0]).
+	 start_link/3, accept/1, listen_opt_type/1, listen_options/0,
+	 get_password/2]).
 
 -include("logger.hrl").
+-ifndef(LAGER).
+-export([stun_filter/2]).
+-define(STUN_MAX_LOG_LEVEL, notice). % Drop STUN/TURN info/debug messages.
+-endif.
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 tcp_init(Socket, Opts) ->
+    init_logger(),
     ejabberd:start_app(stun),
     stun:tcp_init(Socket, prepare_turn_opts(Opts)).
 
 -dialyzer({nowarn_function, udp_init/2}).
 udp_init(Socket, Opts) ->
+    init_logger(),
     ejabberd:start_app(stun),
     stun:udp_init(Socket, prepare_turn_opts(Opts)).
 
@@ -74,6 +81,21 @@ start_link(_SockMod, Socket, Opts) ->
 accept(_Pid) ->
     ok.
 
+get_password(User, Realm) ->
+    case ejabberd_hooks:run_fold(stun_get_password, <<>>, [User, Realm]) of
+	Password when byte_size(Password) > 0 ->
+	    Password;
+	<<>> ->
+	    case ejabberd_auth:get_password_s(User, Realm) of
+		Password when is_binary(Password) ->
+		    Password;
+		_ ->
+		    ?INFO_MSG("Cannot use hashed password of ~s@~s for "
+			      "STUN/TURN authentication", [User, Realm]),
+		    <<>>
+	    end
+    end.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -85,27 +107,36 @@ prepare_turn_opts(Opts, _UseTurn = false) ->
     set_certfile(Opts);
 prepare_turn_opts(Opts, _UseTurn = true) ->
     NumberOfMyHosts = length(ejabberd_option:hosts()),
-    case proplists:get_value(turn_ip, Opts) of
-	undefined ->
-	    ?WARNING_MSG("Option 'turn_ip' is undefined, "
-			 "most likely the TURN relay won't be working "
-			 "properly", []);
-	_ ->
-	    ok
-    end,
-    AuthFun = fun ejabberd_auth:get_password_s/2,
+    TurnIP = case proplists:get_value(turn_ipv4_address, Opts) of
+		 undefined ->
+		     MyIP = misc:get_my_ipv4_address(),
+		     case MyIP of
+			 {127, _, _, _} ->
+			     ?WARNING_MSG("Option 'turn_ipv4_address' is "
+					  "undefined and the server's hostname "
+					  "doesn't resolve to a public IPv4 "
+					  "address, most likely the TURN relay "
+					  "won't be working properly", []);
+			 _ ->
+			     ok
+		     end,
+		     [{turn_ipv4_address, MyIP}];
+		 _ ->
+		     []
+	     end,
+    AuthFun = fun ejabberd_stun:get_password/2,
     Shaper = proplists:get_value(shaper, Opts, none),
     AuthType = proplists:get_value(auth_type, Opts, user),
     Realm = case proplists:get_value(auth_realm, Opts) of
 		undefined when AuthType == user ->
 		    if NumberOfMyHosts > 1 ->
-			    ?WARNING_MSG("You have several virtual "
-					 "hosts configured, but option "
-					 "'auth_realm' is undefined and "
-					 "'auth_type' is set to 'user', "
-					 "most likely the TURN relay won't "
-					 "be working properly. Using ~ts as "
-					 "a fallback", [ejabberd_config:get_myname()]);
+			    ?INFO_MSG("You have several virtual hosts "
+				      "configured, but option 'auth_realm' is "
+				      "undefined and 'auth_type' is set to "
+				      "'user', so the TURN relay might not be "
+				      "working properly. Using ~ts as a "
+				      "fallback",
+				      [ejabberd_config:get_myname()]);
 		       true ->
 			    ok
 		    end,
@@ -114,8 +145,8 @@ prepare_turn_opts(Opts, _UseTurn = true) ->
 		    []
 	    end,
     MaxRate = ejabberd_shaper:get_max_rate(Shaper),
-    Opts1 = Realm ++ [{auth_fun, AuthFun},{shaper, MaxRate} |
-		      lists:keydelete(shaper, 1, Opts)],
+    Opts1 = TurnIP ++ Realm ++ [{auth_fun, AuthFun},{shaper, MaxRate} |
+				lists:keydelete(shaper, 1, Opts)],
     set_certfile(Opts1).
 
 set_certfile(Opts) ->
@@ -135,9 +166,11 @@ set_certfile(Opts) ->
 listen_opt_type(use_turn) ->
     econf:bool();
 listen_opt_type(ip) ->
+    econf:ip();
+listen_opt_type(turn_ipv4_address) ->
     econf:ipv4();
-listen_opt_type(turn_ip) ->
-    econf:ipv4();
+listen_opt_type(turn_ipv6_address) ->
+    econf:ipv6();
 listen_opt_type(auth_type) ->
     econf:enum([anonymous, user]);
 listen_opt_type(auth_realm) ->
@@ -150,6 +183,8 @@ listen_opt_type(turn_max_allocations) ->
     econf:pos_int(infinity);
 listen_opt_type(turn_max_permissions) ->
     econf:pos_int(infinity);
+listen_opt_type(turn_blacklist) ->
+    econf:list_or_single(econf:ip_mask());
 listen_opt_type(server_name) ->
     econf:binary();
 listen_opt_type(certfile) ->
@@ -158,7 +193,8 @@ listen_opt_type(certfile) ->
 listen_options() ->
     [{shaper, none},
      {use_turn, false},
-     {turn_ip, undefined},
+     {turn_ipv4_address, undefined},
+     {turn_ipv6_address, undefined},
      {auth_type, user},
      {auth_realm, undefined},
      {tls, false},
@@ -167,5 +203,34 @@ listen_options() ->
      {turn_max_port, 65535},
      {turn_max_allocations, 10},
      {turn_max_permissions, 10},
+     {turn_blacklist, [<<"2001::/32">>, <<"2002::/16">>]}, % Teredo, 6to4.
      {server_name, <<"ejabberd">>}].
+
+-spec init_logger() -> ok.
+-ifdef(LAGER).
+init_logger() ->
+    ok.
+-else.
+init_logger() ->
+    case logger:add_primary_filter(ejabberd_stun, {fun ?MODULE:stun_filter/2,
+						   ?STUN_MAX_LOG_LEVEL}) of
+	ok ->
+	    ok;
+	{error, {already_exist, _}} ->
+	    ok
+    end.
+
+-spec stun_filter(logger:log_event(), logger:level() | term())
+      -> logger:filter_return().
+stun_filter(#{meta := #{domain := [stun | _]}, level := Level}, MaxLevel) ->
+    case logger:compare_levels(Level, MaxLevel) of
+	lt ->
+	    stop;
+	_ ->
+	    ignore
+    end;
+stun_filter(Event, _Extra) ->
+    Event.
+-endif.
+
 -endif.
